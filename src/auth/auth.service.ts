@@ -16,8 +16,6 @@ export class AuthService {
     ) { }
 
     async register(dto: RegisterDto) {
-        console.log(dto, 'register payload');
-
         // Cek email sudah terdaftar
         const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
         if (existing) throw new BadRequestException('Email already registered');
@@ -62,15 +60,15 @@ export class AuthService {
 
         if (!user.isVerified) throw new ForbiddenException('Email not verified');
 
-        const accessToken = await this.signAccessToken(user.id, user.role);
+        const accessToken = await this.signAccessToken(user.id, user.role, user.email);
         const refresh = await this.createRefreshToken(user.id);
 
         return { accessToken, refreshToken: refresh.token };
     }
 
-    private async signAccessToken(userId: string, role: string) {
+    private async signAccessToken(userId: string, role: string, email: string) {
         return this.jwt.signAsync(
-            { sub: userId, role },
+            { sub: userId, role, email },
             { secret: this.config.get('JWT_ACCESS_SECRET'), expiresIn: this.config.get('JWT_ACCESS_EXPIRES_IN') },
         );
     }
@@ -106,7 +104,7 @@ export class AuthService {
             // rotate: revoke old and create new
             await this.prisma.refreshToken.update({ where: { id: tokenId }, data: { revoked: true } });
             const newRefresh = await this.createRefreshToken(userId);
-            const accessToken = await this.signAccessToken(userId, (await this.prisma.user.findUnique({ where: { id: userId } })).role);
+            const accessToken = await this.signAccessToken(userId, (await this.prisma.user.findUnique({ where: { id: userId } })).role, (await this.prisma.user.findUnique({ where: { id: userId } })).email);
 
             return { accessToken, refreshToken: newRefresh.token };
         } catch (err) {
@@ -171,5 +169,28 @@ export class AuthService {
         if (unit === 'm') return num * 60 * 1000;
         if (unit === 's') return num * 1000;
         return 7 * 24 * 60 * 60 * 1000;
+    }
+
+    async verifyEmail(token: string) {
+        let payload: any;
+        try {
+            payload = this.jwt.verify(token, {
+                secret: this.config.get('JWT_EMAIL_VERIFICATION_SECRET'),
+            });
+        } catch (error) {
+            throw new BadRequestException('Invalid or expired token');
+        }
+
+        const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+        if (!user) throw new NotFoundException('User not found');
+
+        if (user.isVerified) return { message: 'Email already verified' };
+
+        await this.prisma.user.update({
+            where: { id: user.id },
+            data: { isVerified: true },
+        });
+
+        return { message: 'Email verified successfully' };
     }
 }

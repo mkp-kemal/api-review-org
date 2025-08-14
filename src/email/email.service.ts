@@ -13,7 +13,8 @@ export class EmailService {
     }
 
     async sendVerificationEmail(email: string, token: string) {
-        const verifyUrl = `${this.config.get('APP_URL')}/verify-email?token=${token}`;
+        // const verifyUrl = `${this.config.get('APP_URL')}/auth/verify-email?token=${token}`;
+        const verifyUrl = `${this.config.get('APP_URL')}?token=${token}`;
         const msg = {
             to: email,
             from: this.config.get('SENDGRID_FROM_EMAIL'),
@@ -30,7 +31,7 @@ export class EmailService {
     }
 
     async sendResetPasswordEmail(email: string, token: string) {
-        const resetUrl = `${this.config.get('FRONTEND_URL')}/reset-password?token=${token}`;
+        const resetUrl = `${this.config.get('APP_URL')}/reset-password?token=${token}`;
         const msg = {
             to: email,
             from: this.config.get('SENDGRID_FROM_EMAIL'),

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Req, Get, Query, BadRequestException } from '@nestjs/common';
 import { AuthService } from '../auth.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
@@ -6,6 +6,7 @@ import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ForgotPasswordDto, ResetPasswordDto } from '../dto/forgot-password.dto';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { RoleGuard } from './role-guard';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -22,6 +23,12 @@ export class AuthController {
     return this.authService.login(dto.email, dto.password);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  getMe(@Req() req) {
+    return req.user;
+  }
+
   @Post('refresh')
   async refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto.refreshToken);
@@ -34,7 +41,7 @@ export class AuthController {
     return this.authService.forgotPassword(dto.email);
   }
 
-  // Reset password
+  
   @Post('reset-password')
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token, dto.newPassword);
@@ -44,5 +51,11 @@ export class AuthController {
   @Post('logout')
   async logout(@Req() req, @Body() body: { refreshToken: string }) {
     return this.authService.logout(body.refreshToken);
+  }
+
+  @Get('verify-email')
+  async verifyEmail(@Query('token') token: string) {
+    if (!token) throw new BadRequestException('Token is required');
+    return this.authService.verifyEmail(token);
   }
 }

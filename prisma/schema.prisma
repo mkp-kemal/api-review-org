@@ -1,24 +1,156 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// Enums
+model User {
+  id            String         @id @default(cuid())
+  email         String?        @unique
+  passwordHash  String?
+  role          Role           @default(REVIEWER)
+  isVerified    Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  isBanned      Boolean        @default(false)
+  auditLogs     AuditLog[]     @relation("ActorLogs")
+  flags         Flag[]         @relation("FlagReporter")
+  orgResponses  OrgResponse[]
+  orgClaims     Organization[] @relation("OrgClaims")
+  refreshTokens RefreshToken[]
+  reviews       Review[]
+}
+
+model Organization {
+  id            String         @id @default(cuid())
+  name          String
+  city          String
+  state         String
+  website       String?
+  claimedById   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  claimedBy     User?          @relation("OrgClaims", fields: [claimedById], references: [id])
+  subscriptions Subscription[]
+  teams         Team[]
+}
+
+model Team {
+  id             String       @id @default(cuid())
+  organizationId String
+  ageLevel       String
+  division       String
+  city           String
+  state          String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  reviews        Review[]
+  organization   Organization @relation(fields: [organizationId], references: [id])
+}
+
+model Review {
+  id          String       @id @default(cuid())
+  teamId      String
+  userId      String
+  title       String
+  body        String
+  season      Season
+  isPublic    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  editedAt    DateTime?
+  flags       Flag[]
+  orgResponse OrgResponse?
+  rating      Rating?      @relation("ReviewRating")
+  team        Team         @relation(fields: [teamId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@unique([userId, teamId, season])
+}
+
+model Rating {
+  id           String @id @default(cuid())
+  reviewId     String @unique
+  coaching     Int
+  development  Int
+  transparency Int
+  culture      Int
+  safety       Int
+  overall      Float
+  review       Review @relation("ReviewRating", fields: [reviewId], references: [id])
+}
+
+model Flag {
+  id             String     @id @default(cuid())
+  reviewId       String
+  reporterUserId String
+  reason         String
+  status         FlagStatus @default(OPEN)
+  createdAt      DateTime   @default(now())
+  reporter       User       @relation("FlagReporter", fields: [reporterUserId], references: [id])
+  review         Review     @relation(fields: [reviewId], references: [id])
+}
+
+model OrgResponse {
+  id        String   @id @default(cuid())
+  reviewId  String   @unique
+  orgUserId String
+  body      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [orgUserId], references: [id])
+  review    Review   @relation(fields: [reviewId], references: [id])
+}
+
+model Subscription {
+  id               String             @id @default(cuid())
+  organizationId   String
+  plan             SubscriptionPlan
+  status           SubscriptionStatus @default(ACTIVE)
+  stripeCustomerId String
+  stripeSubId      String
+  createdAt        DateTime           @default(now())
+  organization     Organization       @relation(fields: [organizationId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String   @default("ANONYMOUS")
+  action      String
+  targetType  String
+  targetId    String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  actor       User     @relation("ActorLogs", fields: [actorUserId], references: [id])
+
+  @@index([actorUserId])
+  @@index([targetType, targetId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 enum Role {
   REVIEWER
   ORG_ADMIN
   SITE_ADMIN
+  ANONYMOUS
 }
+
+// enum LOGS_TARGET {
+//   REVIEWS
+//   USER
+//   FLAGS_EXPORT
+//   REVIEWS_EXPORT
+// }
 
 enum Season {
   SPRING
@@ -44,143 +176,3 @@ enum SubscriptionStatus {
   CANCELED
   PAST_DUE
 }
-
-// Models
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String
-  role          Role      @default(REVIEWER)
-  isVerified    Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  refreshTokens  RefreshToken[]
-
-  // Relations
-  reviews       Review[]
-  orgClaims     Organization[] @relation("OrgClaims")
-  orgResponses  OrgResponse[]
-  flags         Flag[] @relation("FlagReporter")
-  auditLogs     AuditLog[] @relation("ActorLogs")
-}
-
-model Organization {
-  id             String   @id @default(cuid())
-  name           String
-  city           String
-  state          String
-  website        String?
-  claimedById    String?  // Org Admin user ID
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  // Relations
-  claimedBy      User?    @relation("OrgClaims", fields: [claimedById], references: [id])
-  teams          Team[]
-  subscriptions  Subscription[]
-}
-
-model Team {
-  id             String   @id @default(cuid())
-  organizationId String
-  ageLevel       String
-  division       String
-  city           String
-  state          String
-
-  // Relations
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  reviews        Review[]
-}
-
-model Review {
-  id         String    @id @default(cuid())
-  teamId     String
-  userId     String
-  title      String
-  body       String
-  season     Season
-  isPublic   Boolean   @default(true)
-  createdAt  DateTime  @default(now())
-  editedAt   DateTime?
-
-  // Sub-ratings
-  coaching       Int
-  development    Int
-  transparency   Int
-  culture        Int
-  safety         Int
-  overall        Float
-
-  // Relations
-  team        Team     @relation(fields: [teamId], references: [id])
-  user        User     @relation(fields: [userId], references: [id])
-  flags       Flag[]
-  orgResponse OrgResponse?
-
-  @@unique([userId, teamId, season])
-}
-
-model Flag {
-  id               String     @id @default(cuid())
-  reviewId         String
-  reporterUserId   String
-  reason           String
-  status           FlagStatus @default(OPEN)
-  createdAt        DateTime   @default(now())
-
-  // Relations
-  review   Review @relation(fields: [reviewId], references: [id])
-  reporter User   @relation("FlagReporter", fields: [reporterUserId], references: [id])
-}
-
-model OrgResponse {
-  id        String   @id @default(cuid())
-  reviewId  String   @unique
-  orgUserId String
-  body      String
-  createdAt DateTime @default(now())
-
-  // Relations
-  review Review @relation(fields: [reviewId], references: [id])
-  user   User   @relation(fields: [orgUserId], references: [id])
-}
-
-model Subscription {
-  id                String             @id @default(cuid())
-  organizationId    String
-  plan              SubscriptionPlan
-  status            SubscriptionStatus @default(ACTIVE)
-  stripeCustomerId  String
-  stripeSubId       String
-  createdAt         DateTime           @default(now())
-
-  // Relations
-  organization Organization @relation(fields: [organizationId], references: [id])
-}
-
-model AuditLog {
-  id           String    @id @default(cuid())
-  actorUserId  String
-  action       String
-  targetType   String
-  targetId     String
-  metadata     Json?
-  createdAt    DateTime  @default(now())
-
-  // Relations
-  actor User @relation("ActorLogs", fields: [actorUserId], references: [id])
-}
-
-model RefreshToken {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  revoked   Boolean  @default(false)
-  createdAt DateTime @default(now())
-}
-
-
-
-

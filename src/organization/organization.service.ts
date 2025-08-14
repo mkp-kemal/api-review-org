@@ -1,22 +1,24 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
+import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
 
 @Injectable()
 export class OrganizationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
-  async findAll(query?: { name?: string; state?: string; city?: string }) {
-    const where: any = {};
-    if (query?.name) {
-      where.name = { contains: query.name, mode: 'insensitive' };
-    }
-    if (query?.state) {
-      where.state = { equals: query.state, mode: 'insensitive' };
-    }
-    if (query?.city) {
-      where.city = { equals: query.city, mode: 'insensitive' };
-    }
-    return this.prisma.organization.findMany({ where });
+  async findAll(query: { name?: string; state?: string; city?: string }) {
+    const { name, state, city } = query;
+
+    return this.prisma.organization.findMany({
+      where: {
+        AND: [
+          name ? { name: { contains: name, mode: 'insensitive' } } : {},
+          state ? { state: { equals: state, mode: 'insensitive' } } : {},
+          city ? { city: { equals: city, mode: 'insensitive' } } : {},
+        ],
+      },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async findById(id: string) {
@@ -25,7 +27,7 @@ export class OrganizationService {
     return org;
   }
 
-  async create(data: any) {
+  async create(data: OrganizationDto) {
     return this.prisma.organization.create({ data });
   }
 

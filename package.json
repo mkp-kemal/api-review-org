@@ -31,11 +31,13 @@
     "@sendgrid/mail": "^8.1.5",
     "bcrypt": "^6.0.0",
     "class-validator": "^0.14.2",
+    "csv-writer": "^1.6.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.1",
-    "swagger-ui-express": "^5.0.1"
+    "rxjs": "^7.8.2",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
