@@ -50,4 +50,34 @@ export class OrganizationService {
       data: { claimedById: userId },
     });
   }
+
+  async searchTeamsAndOrganizations(query: string) {
+    const teams = await this.prisma.team.findMany({
+      where: {
+        OR: [
+          { ageLevel: { contains: query, mode: 'insensitive' } },
+          { division: { contains: query, mode: 'insensitive' } },
+          { city: { contains: query, mode: 'insensitive' } },
+          { state: { contains: query, mode: 'insensitive' } },
+          { organization: { name: { contains: query, mode: 'insensitive' } } } // Tambahkan pencarian berdasarkan nama organization
+        ]
+      },
+      include: {
+        organization: true // Menambahkan relasi organization
+      }
+    });
+
+    // Format response sesuai kebutuhan
+    const result = teams.map(team => ({
+      id: team.id,
+      organization: team.organization, // Menambahkan data organization
+      ageLevel: team.ageLevel,
+      division: team.division,
+      city: team.city,
+      state: team.state
+    }));
+
+    return { teams: result };
+  }
+
 }

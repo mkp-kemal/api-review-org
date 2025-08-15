@@ -11,7 +11,7 @@ import { AuditLog } from 'src/audit/audit-log.decorator';
 export class ReviewController {
     constructor(private reviewService: ReviewService) { }
 
-    @AuditLog('CREATE', 'REVIEWS')
+    // @AuditLog('CREATE', 'REVIEWS')
     @UseGuards(OptionalJwtAuthGuard)
     @Post(':teamId/reviews')
     async create(

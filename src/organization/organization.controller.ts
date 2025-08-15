@@ -5,6 +5,7 @@ import { RoleGuard } from 'src/auth/strategies/role-guard';
 import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
 import { Role } from '@prisma/client';
 import { AuditLog } from 'src/audit/audit-log.decorator';
+import { OptionalJwtAuthGuard } from 'src/auth/strategies/jwt-optional-auth.guard';
 
 @Controller('orgs')
 export class OrganizationController {
@@ -50,4 +51,13 @@ export class OrganizationController {
 
     return this.orgService.claimOrg(id, req.user.userId, emailDomain);
   }
+
+  // @UseGuards(OptionalJwtAuthGuard)
+  @Get('with/teams')
+  async listTeamsAndOrganizations(
+    @Query('search') search?: string
+  ) {
+    return this.orgService.searchTeamsAndOrganizations(search || '');
+  }
+
 }
