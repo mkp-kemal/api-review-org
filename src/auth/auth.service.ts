@@ -45,6 +45,76 @@ export class AuthService {
         return { message: 'Registered. Check your email to verify.' };
     }
 
+    private resendCooldown = new Map<string, Date>(); // email -> waktu cooldown
+    private resendCount = new Map<string, number>();  // email -> jumlah sukses resend
+
+    private formatDuration(ms: number): string {
+        const totalSeconds = Math.ceil(ms / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        let parts: string[] = [];
+        if (hours > 0) parts.push(`${hours}h`);
+        if (minutes > 0) parts.push(`${minutes}m`);
+        if (seconds > 0) parts.push(`${seconds}s`);
+
+        return parts.join(' ');
+    }
+
+    async resendVerificationEmail(token: string) {
+        let payload: any;
+        try {
+            payload = this.jwt.verify(token, {
+                secret: this.config.get('JWT_EMAIL_VERIFICATION_SECRET'),
+            });
+        } catch (error) {
+            throw new BadRequestException('Invalid or expired token');
+        }
+
+        const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+        if (!user) throw new NotFoundException('User not found');
+
+        const cooldown = this.resendCooldown.get(user.email);
+        const now = new Date();
+        if (cooldown && now < cooldown) {
+            const remainingMs = cooldown.getTime() - now.getTime();
+            throw new BadRequestException(
+                `Please wait ${this.formatDuration(remainingMs)} before resending the verification email`
+            );
+        }
+
+        const verifyToken = this.jwt.sign(
+            { sub: user.id },
+            { secret: this.config.get('JWT_EMAIL_VERIFICATION_SECRET'), expiresIn: '1d' },
+        );
+        await this.emailService.sendVerificationEmail(user.email, verifyToken);
+
+        // update jumlah resend sukses
+        const count = (this.resendCount.get(user.email) || 0) + 1;
+        this.resendCount.set(user.email, count);
+
+        // set cooldown
+        if (count >= 2) {
+            // cooldown 1 hari
+            const oneDayMs = 24 * 60 * 60 * 1000;
+            this.resendCooldown.set(user.email, new Date(Date.now() + oneDayMs));
+            setTimeout(() => {
+                this.resendCooldown.delete(user.email);
+                this.resendCount.delete(user.email);
+            }, oneDayMs);
+        } else {
+            // cooldown 1 menit
+            const oneMinMs = 60 * 1000;
+            this.resendCooldown.set(user.email, new Date(Date.now() + oneMinMs));
+            setTimeout(() => this.resendCooldown.delete(user.email), oneMinMs);
+        }
+
+        return { message: 'Verification email sent' };
+    }
+
+
+
 
     async validateUser(email: string, pass: string) {
         const user = await this.prisma.user.findUnique({ where: { email } });
@@ -131,15 +201,8 @@ export class AuthService {
         return { message: 'Password reset link sent to your email' };
     }
 
-    async resetPassword(token: string, newPassword: string) {
-        let payload: any;
-        try {
-            payload = this.jwt.verify(token, { secret: this.config.get('JWT_RESET_PASSWORD_SECRET') });
-        } catch (e) {
-            throw new BadRequestException('Invalid or expired token');
-        }
-
-        const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    async resetPassword(userId: string, newPassword: string) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user) throw new NotFoundException('User not found');
 
         const hashed = await bcrypt.hash(newPassword, 12);
@@ -151,6 +214,7 @@ export class AuthService {
 
         return { message: 'Password has been reset successfully' };
     }
+
 
     async logout(tokenId: string) {
         await this.prisma.refreshToken.updateMany({

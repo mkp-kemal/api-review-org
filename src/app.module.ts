@@ -13,6 +13,8 @@ import { AdminModule } from './admin/admin.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditLogInterceptor } from './audit/audit-log.interceptor';
 import { AuditLogModule } from './audit/audit-log.module';
+import { BillingModule } from './billing/billing.module';
+import { StripeModule } from './stripe/stripe.module';
 
 
 @Module({
@@ -34,7 +36,9 @@ import { AuditLogModule } from './audit/audit-log.module';
     FlagsModule,
     ResponsesModule,
     AdminModule,
-    AuditLogModule
+    AuditLogModule,
+    BillingModule,
+    StripeModule,
   ],
 })
 export class AppModule {}

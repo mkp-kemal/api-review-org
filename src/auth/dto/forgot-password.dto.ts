@@ -11,12 +11,8 @@ export class ForgotPasswordDto {
 import { IsString, MinLength } from 'class-validator';
 
 export class ResetPasswordDto {
-    @ApiProperty({ example: 'token-string', description: 'Token reset password' })
     @IsString()
-    token: string;
-
-    @ApiProperty({ example: 'NewPass123!', description: 'Password baru minimal 6 karakter' })
-    @IsString()
-    @MinLength(6)
+    @MinLength(8)
     newPassword: string;
 }
+

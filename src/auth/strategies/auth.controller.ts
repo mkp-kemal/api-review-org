@@ -18,6 +18,13 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
+  @Post('resend-verification-email')
+  @Get('resend-verification-email')
+  async resendVerificationEmail(@Query('token') token: string) {
+    if (!token) throw new BadRequestException('Token is required');
+    return this.authService.resendVerificationEmail(token);
+  }
+
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto.email, dto.password);
@@ -43,9 +50,11 @@ export class AuthController {
 
   
   @Post('reset-password')
-  async resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto.token, dto.newPassword);
-  }
+@UseGuards(JwtAuthGuard)
+async resetPassword(@Req() req, @Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(req.user.userId, dto.newPassword);
+}
+
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')

@@ -11,6 +11,7 @@ export class OrganizationController {
   constructor(private orgService: OrganizationService) { }
 
   @AuditLog('READ', 'ORGANIZATION')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Get()
   async listOrgs(
     @Query('name') name?: string,
@@ -21,6 +22,7 @@ export class OrganizationController {
   }
 
   @AuditLog('READ', 'ORGANIZATION_DETAIL')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Get(':id')
   async getOrg(@Param('id') id: string) {
     return this.orgService.findById(id);
@@ -41,11 +43,11 @@ export class OrganizationController {
   }
 
   @AuditLog('UPDATE', 'ORGANIZATION_CLAIM')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Patch(':id/claim')
   async claimOrg(@Param('id') id: string, @Req() req) {
     const emailDomain = req.user.email?.split('@')[1];
-    
+
     return this.orgService.claimOrg(id, req.user.userId, emailDomain);
   }
 }
