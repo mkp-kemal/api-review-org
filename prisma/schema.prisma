@@ -17,6 +17,15 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   isBanned      Boolean        @default(false)
+
+  // Relations for Org submission/approval
+  submittedOrgs Organization[] @relation("OrgSubmittedBy")
+  approvedOrgs  Organization[] @relation("OrgApprovedBy")
+
+  // Relations for Team submission/approval
+  submittedTeams Team[]        @relation("TeamSubmittedBy")
+  approvedTeams  Team[]        @relation("TeamApprovedBy")
+
   auditLogs     AuditLog[]     @relation("ActorLogs")
   flags         Flag[]         @relation("FlagReporter")
   orgResponses  OrgResponse[]
@@ -25,6 +34,7 @@ model User {
   reviews       Review[]
 }
 
+
 model Organization {
   id            String         @id @default(cuid())
   name          String
@@ -32,25 +42,40 @@ model Organization {
   state         String
   website       String?
   claimedById   String?
+  status        OrgStatus      @default(PENDING) // pending | approved | rejected
+  submittedById String?        // Org Admin yang submit
+  approvedById  String?        // Site Admin yang approve/reject
+  rejectedReason String?       // Optional note jika reject
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   claimedBy     User?          @relation("OrgClaims", fields: [claimedById], references: [id])
+  submittedBy   User?          @relation("OrgSubmittedBy", fields: [submittedById], references: [id])
+  approvedBy    User?          @relation("OrgApprovedBy", fields: [approvedById], references: [id])
   subscriptions Subscription[]
   teams         Team[]
 }
 
+
 model Team {
   id             String       @id @default(cuid())
   organizationId String
+  name           String       @default("Unnamed Team")
   ageLevel       String
   division       String
   city           String
   state          String
+  status         OrgStatus     @default(PENDING) // pending | approved | rejected
+  submittedById  String?       // Org Admin yang submit
+  approvedById   String?       // Site Admin yang approve/reject
+  rejectedReason String?       // Optional note jika reject
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   reviews        Review[]
   organization   Organization @relation(fields: [organizationId], references: [id])
+  submittedBy    User?        @relation("TeamSubmittedBy", fields: [submittedById], references: [id])
+  approvedBy     User?        @relation("TeamApprovedBy", fields: [approvedById], references: [id])
 }
+
 
 model Review {
   id          String       @id @default(cuid())
@@ -156,6 +181,7 @@ enum Season {
   SPRING
   SUMMER
   FALL
+  WINTER
 }
 
 enum FlagStatus {
@@ -175,4 +201,10 @@ enum SubscriptionStatus {
   ACTIVE
   CANCELED
   PAST_DUE
+}
+
+enum OrgStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

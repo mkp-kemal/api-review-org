@@ -15,6 +15,7 @@ import { AuditLogInterceptor } from './audit/audit-log.interceptor';
 import { AuditLogModule } from './audit/audit-log.module';
 import { BillingModule } from './billing/billing.module';
 import { StripeModule } from './stripe/stripe.module';
+import { TeamModule } from './teams/team.module';
 
 
 @Module({
@@ -39,6 +40,7 @@ import { StripeModule } from './stripe/stripe.module';
     AuditLogModule,
     BillingModule,
     StripeModule,
+    TeamModule
   ],
 })
 export class AppModule {}

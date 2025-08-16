@@ -7,27 +7,23 @@ import { v4 as uuidv4 } from 'uuid';
 export class ReviewService {
     constructor(private prisma: PrismaService) { }
 
+    // review.service.ts
     async createReview(
-        userId: string | null, // bisa dari token kalau login, atau dari anonymous id
+        userId: string, // sekarang wajib ada, sudah dijamin dari FE atau token
         teamId: string,
         dto: CreateReviewDto,
     ) {
-        if (!userId) {
-            // Kalau tidak ada userId dari frontend, buat id baru
-            userId = uuidv4();
-        }
-
-        // Cek user exist di DB
+        // Cari user di DB
         let user = await this.prisma.user.findUnique({ where: { id: userId } });
 
         if (!user) {
-            // Jika belum ada, buat user anonymous
+            // Buat user anonymous jika belum ada
             user = await this.prisma.user.create({
                 data: {
                     id: userId,
-                    role: 'ANONYMOUS', // pastikan role ini ada di enum Role
+                    role: 'ANONYMOUS',
                     email: null,
-                    passwordHash: null, // atau kosong
+                    passwordHash: null,
                     isVerified: false,
                 },
             });
@@ -37,16 +33,15 @@ export class ReviewService {
         const exists = await this.prisma.review.findUnique({
             where: { userId_teamId_season: { userId, teamId, season: dto.season } },
         });
-        if (exists)
+        if (exists) {
             throw new BadRequestException(
                 'You already submitted a review for this team this season.',
             );
+        }
 
         const overall =
-            (dto.coaching + dto.development + dto.transparency + dto.culture + dto.safety) /
-            5;
+            (dto.coaching + dto.development + dto.transparency + dto.culture + dto.safety) / 5;
 
-        // Buat review
         const review = await this.prisma.review.create({
             data: {
                 userId,
@@ -54,11 +49,12 @@ export class ReviewService {
                 title: dto.title,
                 body: dto.body,
                 season: dto.season,
-                isPublic: dto.isPublic ?? true,
+                isPublic: false,
+                // isPublic: dto.isPublic ?? false,
+
             },
         });
 
-        // Buat rating terkait
         await this.prisma.rating.create({
             data: {
                 reviewId: review.id,
@@ -71,14 +67,18 @@ export class ReviewService {
             },
         });
 
-        // Return review + rating + userId (agar frontend simpan userId nya)
         const result = await this.prisma.review.findUnique({
             where: { id: review.id },
-            include: { rating: true, orgResponse: true, team: { include: { organization: true } } },
+            include: {
+                rating: true,
+                orgResponse: true,
+                team: { include: { organization: true } },
+            },
         });
 
         return { ...result, userId };
     }
+
 
     async updateReview(userId: string, teamId: string, dto: CreateReviewDto) {
         const review = await this.prisma.review.findUnique({

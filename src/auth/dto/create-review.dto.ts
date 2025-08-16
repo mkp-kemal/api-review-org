@@ -6,6 +6,10 @@ export class CreateReviewDto {
   title: string;
 
   @IsString()
+  @IsOptional()
+  userId?: string;
+
+  @IsString()
   body: string;
 
   @IsEnum(Season)

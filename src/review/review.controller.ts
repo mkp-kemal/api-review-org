@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, UseGuards, Req, Get, Query, Put } from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards, Req, Get, Query, Put, BadRequestException } from '@nestjs/common';
 import { ReviewService } from './review.service';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
@@ -12,22 +12,25 @@ export class ReviewController {
     constructor(private reviewService: ReviewService) { }
 
     // @AuditLog('CREATE', 'REVIEWS')
+    // review.controller.ts
     @UseGuards(OptionalJwtAuthGuard)
     @Post(':teamId/reviews')
     async create(
         @Req() req,
         @Param('teamId') teamId: string,
-        @Body() dto: CreateReviewDto,
+        @Body() dto: CreateReviewDto & { userId?: string },
     ) {
-        // userId bisa didapat dari req.user (login) atau dari header/body untuk anonymous
-        // Misal anonymous kirim userId di header 'x-anonymous-userid'
-        const anonymousUserId = req.headers['x-anonymous-userid'] as string | undefined;
-        const userId = req.user?.userId ?? anonymousUserId ?? null;
+        // Kalau login → pakai userId dari token
+        // Kalau anonymous → pakai userId dari body (FE sudah generate & kirim)
+        const userId = req.user?.userId ?? dto.userId;
 
-        const result = await this.reviewService.createReview(userId, teamId, dto);
+        if (!userId) {
+            throw new BadRequestException('userId is required');
+        }
 
-        return result;
+        return this.reviewService.createReview(userId, teamId, dto);
     }
+
 
     @AuditLog('UPDATE', 'REVIEWS')
     @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
@@ -40,7 +43,7 @@ export class ReviewController {
         return this.reviewService.updateReview(req.user.userId, teamId, dto);
     }
 
-    @AuditLog('READ', 'REVIEWS')
+    // @AuditLog('READ', 'REVIEWS')
     @UseGuards(OptionalJwtAuthGuard)
     @Get('reviews')
     async list(@Query('sort') sort: 'recent' | 'rating' = 'recent') {

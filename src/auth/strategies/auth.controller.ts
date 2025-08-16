@@ -48,12 +48,12 @@ export class AuthController {
     return this.authService.forgotPassword(dto.email);
   }
 
-  
+
   @Post('reset-password')
-@UseGuards(JwtAuthGuard)
-async resetPassword(@Req() req, @Body() dto: ResetPasswordDto) {
+  @UseGuards(JwtAuthGuard)
+  async resetPassword(@Req() req, @Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(req.user.userId, dto.newPassword);
-}
+  }
 
 
   @UseGuards(JwtAuthGuard)
@@ -66,5 +66,19 @@ async resetPassword(@Req() req, @Body() dto: ResetPasswordDto) {
   async verifyEmail(@Query('token') token: string) {
     if (!token) throw new BadRequestException('Token is required');
     return this.authService.verifyEmail(token);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('check')
+  async check(@Req() req) {
+    // Kalau sampai sini berarti token valid
+    return {
+      isAuthenticated: true,
+      user: {
+        id: req.user.userId,
+        email: req.user.email,
+        role: req.user.role,
+      },
+    };
   }
 }

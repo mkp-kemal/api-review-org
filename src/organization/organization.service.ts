@@ -54,12 +54,20 @@ export class OrganizationService {
   async searchTeamsAndOrganizations(query: string) {
     const teams = await this.prisma.team.findMany({
       where: {
-        OR: [
-          { ageLevel: { contains: query, mode: 'insensitive' } },
-          { division: { contains: query, mode: 'insensitive' } },
-          { city: { contains: query, mode: 'insensitive' } },
-          { state: { contains: query, mode: 'insensitive' } },
-          { organization: { name: { contains: query, mode: 'insensitive' } } } // Tambahkan pencarian berdasarkan nama organization
+        AND: [
+          { status: 'APPROVED' }, // Hanya team yang approved
+          {
+            organization: { status: 'APPROVED' } // Hanya organization yang approved
+          },
+          {
+            OR: [
+              { ageLevel: { contains: query, mode: 'insensitive' } },
+              { division: { contains: query, mode: 'insensitive' } },
+              { city: { contains: query, mode: 'insensitive' } },
+              { state: { contains: query, mode: 'insensitive' } },
+              { organization: { name: { contains: query, mode: 'insensitive' } } }
+            ]
+          }
         ]
       },
       include: {
@@ -70,7 +78,7 @@ export class OrganizationService {
     // Format response sesuai kebutuhan
     const result = teams.map(team => ({
       id: team.id,
-      organization: team.organization, // Menambahkan data organization
+      organization: team.organization,
       ageLevel: team.ageLevel,
       division: team.division,
       city: team.city,
@@ -79,5 +87,6 @@ export class OrganizationService {
 
     return { teams: result };
   }
+
 
 }
