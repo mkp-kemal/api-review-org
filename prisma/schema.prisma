@@ -59,7 +59,7 @@ model Organization {
 model Team {
   id             String       @id @default(cuid())
   organizationId String
-  name           String       @default("Unnamed Team")
+  name           String       @unique
   ageLevel       String
   division       String
   city           String

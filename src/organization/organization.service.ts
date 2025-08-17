@@ -51,6 +51,17 @@ export class OrganizationService {
     });
   }
 
+  async delete(id: string) {
+    const org = await this.findById(id);
+
+    const teamsWithOrg = await this.prisma.team.findMany({ where: { organizationId: id } });
+    if (teamsWithOrg.length > 0) {
+      throw new BadRequestException('Organization has related teams');
+    }
+
+    return this.prisma.organization.delete({ where: { id } });
+  }
+
   async searchTeamsAndOrganizations(query: string) {
     const teams = await this.prisma.team.findMany({
       where: {
@@ -88,5 +99,39 @@ export class OrganizationService {
     return { teams: result };
   }
 
+  async csvCreateMany(data: any[]) {
+    const createdOrgs = [];
+    const skipped: string[] = [];
+
+    for (const row of data) {
+      const existing = await this.prisma.organization.findFirst({
+        where: {
+          name: row.name,
+        },
+      });
+
+      if (existing) {
+        skipped.push(row.name);
+        continue;
+      }
+
+      const org = await this.prisma.organization.create({
+        data: {
+          name: row.name,
+          state: row.state,
+          city: row.city,
+          website: row.website,
+          status: 'PENDING',
+        },
+      });
+
+      createdOrgs.push(org);
+    }
+
+    return {
+      created: createdOrgs,
+      skipped,
+    };
+  }
 
 }

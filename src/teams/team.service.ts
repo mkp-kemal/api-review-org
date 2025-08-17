@@ -42,4 +42,45 @@ export class TeamService {
         return this.prisma.team.delete({ where: { id } });
     }
 
+    async csvCreateMany(data: any[], organizationId: string) {
+        const createdTeams = [];
+    const skipped: string[] = [];
+
+        for (const row of data) {
+            const existing = await this.prisma.team.findFirst({
+                where: {
+                    name: row.name,
+                    organizationId: organizationId,
+                },
+            });
+
+            if (existing) {
+                skipped.push(row.name);
+                continue;
+            }
+
+            const team = await this.prisma.team.create({
+                data: {
+                    name: row.name,
+                    ageLevel: row.ageLevel,
+                    division: row.division,
+                    state: row.state,
+                    city: row.city,
+                    organizationId: organizationId,
+                    status: 'PENDING',
+                },
+            });
+
+            createdTeams.push(team);
+        }
+
+        return {
+            created: createdTeams,
+            skipped,
+        };
+    }
+
+
+
+
 }

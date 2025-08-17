@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards, Req, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, UseGuards, Req, Patch, UseInterceptors, UploadedFile, BadRequestException, Delete } from '@nestjs/common';
 import { OrganizationService } from './organization.service';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 import { RoleGuard } from 'src/auth/strategies/role-guard';
@@ -6,6 +6,10 @@ import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
 import { Role } from '@prisma/client';
 import { AuditLog } from 'src/audit/audit-log.decorator';
 import { OptionalJwtAuthGuard } from 'src/auth/strategies/jwt-optional-auth.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
+import * as csvParser from 'csv-parser';
+import { File as MulterFile } from 'multer';
+import * as streamifier from 'streamifier';
 
 @Controller('orgs')
 export class OrganizationController {
@@ -52,6 +56,13 @@ export class OrganizationController {
     return this.orgService.claimOrg(id, req.user.userId, emailDomain);
   }
 
+  @AuditLog('DELETE', 'ORGANIZATION')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
+  @Delete(':id')
+  async deleteOrg(@Param('id') id: string) {
+    return this.orgService.delete(id);
+  }
+
   // @UseGuards(OptionalJwtAuthGuard)
   @Get('with/teams')
   async listTeamsAndOrganizations(
@@ -60,4 +71,28 @@ export class OrganizationController {
     return this.orgService.searchTeamsAndOrganizations(search || '');
   }
 
+   @Post('upload-csv')
+    @UseInterceptors(FileInterceptor('file'))
+    async uploadCsv(@UploadedFile() file: MulterFile) {
+      const results: any[] = [];
+
+      if (!file) {
+        throw new BadRequestException('No file uploaded');
+      }
+  
+      return new Promise((resolve, reject) => {
+        streamifier.createReadStream(file.buffer)
+          .pipe(csvParser())
+          .on('data', (row: any) => results.push(row))
+          .on('end', async () => {
+            try {
+              const created = await this.orgService.csvCreateMany(results);
+              resolve({ message: 'CSV processed successfully', data: created });
+            } catch (err) {
+              reject(err);
+            }
+          })
+          .on('error', (err) => reject(err));
+      });
+    }
 }
