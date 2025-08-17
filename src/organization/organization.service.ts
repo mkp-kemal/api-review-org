@@ -22,10 +22,83 @@ export class OrganizationService {
   }
 
   async findById(id: string) {
-    const org = await this.prisma.organization.findUnique({ where: { id } });
+    const org = await this.prisma.organization.findUnique({
+      where: { id },
+      select: {
+        claimedById: true,
+        name: true,
+        city: true,
+        state: true,
+        website: true,
+        teams: {
+          select: {
+            name: true,
+            ageLevel: true,
+            division: true,
+            city: true,
+            state: true,
+            status: true,
+            reviews: {
+              select: {
+                title: true,
+                body: true,
+                season_term: true,
+                season_year: true,
+                isPublic: true,
+                createdAt: true,
+                editedAt: true,
+                user: {
+                  select: {
+                    email: true,
+                    role: true,
+                  },
+                },
+                rating: {
+                  select: {
+                    coaching: true,
+                    development: true,
+                    transparency: true,
+                    culture: true,
+                    safety: true,
+                    overall: true,
+                  },
+                },
+                orgResponse: {
+                  select: {
+                    body: true,
+                    createdAt: true,
+                    user: {
+                      select: {
+                        email: true,
+                        role: true,
+                      },
+                    },
+                  },
+                },
+                flags: {
+                  select: {
+                    reason: true,
+                    status: true,
+                    createdAt: true,
+                    reporter: {
+                      select: {
+                        email: true,
+                        role: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
     if (!org) throw new NotFoundException('Organization not found');
     return org;
   }
+
 
   async create(data: OrganizationDto) {
     return this.prisma.organization.create({ data });

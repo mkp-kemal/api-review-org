@@ -6,6 +6,7 @@ import { RoleGuard } from 'src/auth/strategies/role-guard';
 import { OptionalJwtAuthGuard } from 'src/auth/strategies/jwt-optional-auth.guard';
 import { Role } from '@prisma/client';
 import { AuditLog } from 'src/audit/audit-log.decorator';
+import { UpdateReviewDto } from 'src/auth/dto/update-review.dto';
 
 @Controller('teams')
 export class ReviewController {
@@ -38,7 +39,7 @@ export class ReviewController {
     async update(
         @Req() req,
         @Param('teamId') teamId: string,
-        @Body() dto: CreateReviewDto,
+        @Body() dto: UpdateReviewDto,
     ) {
         return this.reviewService.updateReview(req.user.userId, teamId, dto);
     }

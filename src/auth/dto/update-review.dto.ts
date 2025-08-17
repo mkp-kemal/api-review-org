@@ -1,7 +1,7 @@
 import { IsString, IsEnum, IsInt, Min, Max, IsBoolean, IsOptional } from 'class-validator';
 import { Season } from '@prisma/client';
 
-export class CreateReviewDto {
+export class UpdateReviewDto {
   @IsString()
   title: string;
 
@@ -16,8 +16,8 @@ export class CreateReviewDto {
   @Max(2100) // contoh maksimal tahun
   season_year: number;
 
-  // @IsString()
-  // age_level_at_review: string;
+  @IsString()
+  age_level_at_review: string;
 
   @IsInt()
   @Min(1)
@@ -44,8 +44,8 @@ export class CreateReviewDto {
   @Max(5)
   safety: number;
 
-  // @IsBoolean()
-  // @IsOptional()
-  // isPublic?: boolean;
+  @IsBoolean()
+  @IsOptional()
+  isPublic?: boolean;
 }
 

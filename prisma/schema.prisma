@@ -9,22 +9,20 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String?        @unique
-  passwordHash  String?
-  role          Role           @default(REVIEWER)
-  isVerified    Boolean        @default(false)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  isBanned      Boolean        @default(false)
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  passwordHash String?
+  role         Role     @default(REVIEWER)
+  isVerified   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  isBanned     Boolean  @default(false)
 
-  // Relations for Org submission/approval
   submittedOrgs Organization[] @relation("OrgSubmittedBy")
   approvedOrgs  Organization[] @relation("OrgApprovedBy")
 
-  // Relations for Team submission/approval
-  submittedTeams Team[]        @relation("TeamSubmittedBy")
-  approvedTeams  Team[]        @relation("TeamApprovedBy")
+  submittedTeams Team[] @relation("TeamSubmittedBy")
+  approvedTeams  Team[] @relation("TeamApprovedBy")
 
   auditLogs     AuditLog[]     @relation("ActorLogs")
   flags         Flag[]         @relation("FlagReporter")
@@ -32,69 +30,115 @@ model User {
   orgClaims     Organization[] @relation("OrgClaims")
   refreshTokens RefreshToken[]
   reviews       Review[]
+
+  orgRoles  UserOrgRole[]
+  teamRoles UserTeamRole[]
 }
 
+model UserOrgRole {
+  id     String  @id @default(cuid())
+  userId String
+  orgId  String
+  role   OrgRole
+
+  user User         @relation(fields: [userId], references: [id])
+  org  Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([userId, orgId])
+}
+
+model UserTeamRole {
+  id     String   @id @default(cuid())
+  userId String
+  teamId String
+  role   TeamRole
+
+  user User @relation(fields: [userId], references: [id])
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@unique([userId, teamId])
+}
 
 model Organization {
-  id            String         @id @default(cuid())
-  name          String
-  city          String
-  state         String
-  website       String?
-  claimedById   String?
-  status        OrgStatus      @default(PENDING) // pending | approved | rejected
-  submittedById String?        // Org Admin yang submit
-  approvedById  String?        // Site Admin yang approve/reject
-  rejectedReason String?       // Optional note jika reject
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id             String    @id @default(cuid())
+  name           String
+  city           String
+  state          String
+  website        String?
+  claimedById    String?
+  status         OrgStatus @default(PENDING)
+  submittedById  String?
+  approvedById   String?
+  rejectedReason String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
   claimedBy     User?          @relation("OrgClaims", fields: [claimedById], references: [id])
   submittedBy   User?          @relation("OrgSubmittedBy", fields: [submittedById], references: [id])
   approvedBy    User?          @relation("OrgApprovedBy", fields: [approvedById], references: [id])
   subscriptions Subscription[]
   teams         Team[]
+  roles         UserOrgRole[]
 }
 
-
 model Team {
-  id             String       @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
-  name           String       @unique
+  name           String
   ageLevel       String
   division       String
   city           String
   state          String
-  status         OrgStatus     @default(PENDING) // pending | approved | rejected
-  submittedById  String?       // Org Admin yang submit
-  approvedById   String?       // Site Admin yang approve/reject
-  rejectedReason String?       // Optional note jika reject
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  reviews        Review[]
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  submittedBy    User?        @relation("TeamSubmittedBy", fields: [submittedById], references: [id])
-  approvedBy     User?        @relation("TeamApprovedBy", fields: [approvedById], references: [id])
+  status         OrgStatus @default(PENDING)
+  submittedById  String?
+  approvedById   String?
+  rejectedReason String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  submittedBy   User?          @relation("TeamSubmittedBy", fields: [submittedById], references: [id])
+  approvedBy    User?          @relation("TeamApprovedBy", fields: [approvedById], references: [id])
+  reviews       Review[]
+  roles         UserTeamRole[]
+  subscriptions Subscription[]
 }
 
+model Subscription {
+  id               String             @id @default(cuid())
+  organizationId   String? // nullable jika team-level subscription
+  teamId           String? // nullable if org-level subscription
+  plan             SubscriptionPlan
+  status           SubscriptionStatus @default(ACTIVE)
+  stripeCustomerId String
+  stripeSubId      String
+  createdAt        DateTime           @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  team         Team?         @relation(fields: [teamId], references: [id])
+}
 
 model Review {
-  id          String       @id @default(cuid())
-  teamId      String
-  userId      String
-  title       String
-  body        String
-  season      Season
-  isPublic    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  editedAt    DateTime?
-  flags       Flag[]
-  orgResponse OrgResponse?
-  rating      Rating?      @relation("ReviewRating")
-  team        Team         @relation(fields: [teamId], references: [id])
-  user        User         @relation(fields: [userId], references: [id])
+  id                  String       @id @default(cuid())
+  teamId              String
+  userId              String
+  title               String
+  body                String
+  season_term         Season       @default(SPRING)
+  season_year         Int          @default(2024)
+  age_level_at_review String       @default("12U")
+  isPublic            Boolean      @default(false)
+  createdAt           DateTime     @default(now())
+  editedAt            DateTime?
+  flags               Flag[]
+  orgResponse         OrgResponse?
+  rating              Rating?      @relation("ReviewRating")
+  team                Team         @relation(fields: [teamId], references: [id])
+  user                User         @relation(fields: [userId], references: [id])
 
-  @@unique([userId, teamId, season])
+  @@unique([userId, teamId, season_term, season_year])
 }
+
 
 model Rating {
   id           String @id @default(cuid())
@@ -129,17 +173,6 @@ model OrgResponse {
   review    Review   @relation(fields: [reviewId], references: [id])
 }
 
-model Subscription {
-  id               String             @id @default(cuid())
-  organizationId   String
-  plan             SubscriptionPlan
-  status           SubscriptionStatus @default(ACTIVE)
-  stripeCustomerId String
-  stripeSubId      String
-  createdAt        DateTime           @default(now())
-  organization     Organization       @relation(fields: [organizationId], references: [id])
-}
-
 model AuditLog {
   id          String   @id @default(cuid())
   actorUserId String   @default("ANONYMOUS")
@@ -166,16 +199,18 @@ model RefreshToken {
 enum Role {
   REVIEWER
   ORG_ADMIN
+  TEAM_ADMIN
   SITE_ADMIN
   ANONYMOUS
 }
 
-// enum LOGS_TARGET {
-//   REVIEWS
-//   USER
-//   FLAGS_EXPORT
-//   REVIEWS_EXPORT
-// }
+enum OrgRole {
+  ORG_ADMIN
+}
+
+enum TeamRole {
+  TEAM_ADMIN
+}
 
 enum Season {
   SPRING
