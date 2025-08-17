@@ -45,8 +45,8 @@ export class AuthService {
         return { message: 'Registered. Check your email to verify.' };
     }
 
-    private resendCooldown = new Map<string, Date>(); // email -> waktu cooldown
-    private resendCount = new Map<string, number>();  // email -> jumlah sukses resend
+    private resendCooldown = new Map<string, Date>(); // token -> waktu cooldown
+    private resendCount = new Map<string, number>();  // token -> jumlah sukses resend
 
     private formatDuration(ms: number): string {
         const totalSeconds = Math.ceil(ms / 1000);
@@ -62,6 +62,10 @@ export class AuthService {
         return parts.join(' ');
     }
 
+
+    // user email -> { token -> cooldown info }
+    private userResendMap = new Map<string, Map<string, { count: number; expiresAt: Date }>>();
+
     async resendVerificationEmail(token: string) {
         let payload: any;
         try {
@@ -75,43 +79,49 @@ export class AuthService {
         const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
         if (!user) throw new NotFoundException('User not found');
 
-        const cooldown = this.resendCooldown.get(user.email);
         const now = new Date();
-        if (cooldown && now < cooldown) {
-            const remainingMs = cooldown.getTime() - now.getTime();
+        if (!this.userResendMap.has(user.email)) {
+            this.userResendMap.set(user.email, new Map());
+        }
+
+        const tokenMap = this.userResendMap.get(user.email)!;
+        const tokenInfo = tokenMap.get(token);
+
+        if (tokenInfo && now < tokenInfo.expiresAt) {
+            const remainingMs = tokenInfo.expiresAt.getTime() - now.getTime();
             throw new BadRequestException(
                 `Please wait ${this.formatDuration(remainingMs)} before resending the verification email`
             );
         }
 
+        // kirim email
         const verifyToken = this.jwt.sign(
             { sub: user.id },
             { secret: this.config.get('JWT_EMAIL_VERIFICATION_SECRET'), expiresIn: '1d' },
         );
         await this.emailService.sendVerificationEmail(user.email, verifyToken);
 
-        // update jumlah resend sukses
-        const count = (this.resendCount.get(user.email) || 0) + 1;
-        this.resendCount.set(user.email, count);
-
-        // set cooldown
+        // update token info
+        const count = (tokenInfo?.count || 0) + 1;
+        let cooldownMs: number;
         if (count >= 2) {
-            // cooldown 1 hari
-            const oneDayMs = 24 * 60 * 60 * 1000;
-            this.resendCooldown.set(user.email, new Date(Date.now() + oneDayMs));
-            setTimeout(() => {
-                this.resendCooldown.delete(user.email);
-                this.resendCount.delete(user.email);
-            }, oneDayMs);
+            cooldownMs = 24 * 60 * 60 * 1000; // 1 hari
         } else {
-            // cooldown 1 menit
-            const oneMinMs = 60 * 1000;
-            this.resendCooldown.set(user.email, new Date(Date.now() + oneMinMs));
-            setTimeout(() => this.resendCooldown.delete(user.email), oneMinMs);
+            cooldownMs = 60 * 1000; // 1 menit
         }
+
+        tokenMap.set(token, { count, expiresAt: new Date(Date.now() + cooldownMs) });
+
+        // bersihkan token setelah cooldown
+        setTimeout(() => {
+            tokenMap.delete(token);
+            if (tokenMap.size === 0) this.userResendMap.delete(user.email);
+        }, cooldownMs);
 
         return { message: 'Verification email sent' };
     }
+
+
 
 
 
