@@ -193,19 +193,16 @@ export class AuthService {
     }
 
     async forgotPassword(email: string) {
-
         if (!email) throw new BadRequestException('Email is required');
         const user = await this.prisma.user.findUnique({ where: { email } });
         if (!user) throw new NotFoundException('Email not found');
         if (!user.isVerified) throw new ForbiddenException('Email not verified');
 
-        // Buat token reset password (expire 1 jam)
         const token = this.jwt.sign(
             { sub: user.id },
             { secret: this.config.get('JWT_RESET_PASSWORD_SECRET'), expiresIn: '1h' },
         );
 
-        // Kirim email reset password
         await this.emailService.sendResetPasswordEmail(email, token);
 
         return { message: 'Password reset link sent to your email' };
@@ -266,5 +263,21 @@ export class AuthService {
         });
 
         return { message: 'Email verified successfully' };
+    }
+
+    async verifyPassword (token: string) {
+        let payload: any;
+        try {
+            payload = this.jwt.verify(token, {
+                secret: this.config.get('JWT_RESET_PASSWORD_SECRET'),
+            });
+        } catch (error) {
+            throw new BadRequestException('Invalid or expired token');
+        }
+
+        const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+        if (!user) throw new NotFoundException('User not found');
+
+        return { message: 'Password reset link sent to your email' };
     }
 }

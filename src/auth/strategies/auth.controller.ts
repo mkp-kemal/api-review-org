@@ -68,6 +68,12 @@ export class AuthController {
     return this.authService.verifyEmail(token);
   }
 
+  @Get('verify-password')
+  async verifyPassword(@Query('token') token: string) {
+    if (!token) throw new BadRequestException('Token is required');
+    return this.authService.verifyPassword(token);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('check')
   async check(@Req() req) {
