@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
+import { CreateResponseReviewDto } from 'src/auth/dto/create-response-review.dto';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
 import { UpdateReviewDto } from 'src/auth/dto/update-review.dto';
 import { v4 as uuidv4 } from 'uuid';
@@ -27,7 +28,7 @@ export class ReviewService {
             });
         }
 
-        
+
         // Cek id team
         const team = await this.prisma.team.findUnique({ where: { id: teamId } });
         if (!team) {
@@ -146,10 +147,26 @@ export class ReviewService {
             orderBy,
             include: {
                 rating: true,
-                orgResponse: true,
+                orgResponse: {
+                    select: {
+                      body: true,
+                      createdAt: true,  
+                      user: {
+                        select: {
+                          email: true,
+                        },
+                      }
+                    },
+
+                },
                 team: {
                     include: {
                         organization: true,
+                    },
+                },
+                user: {
+                    select: {
+                        email: true,
                     },
                 },
             },
@@ -163,5 +180,41 @@ export class ReviewService {
         });
         if (!review) throw new NotFoundException('Review not found');
         return review;
+    }
+
+
+    async respondToReview(reviewId: string, orgUserId: string, dto: CreateResponseReviewDto) {
+        // cek review
+        const review = await this.prisma.review.findUnique({
+            where: { id: reviewId },
+        });
+
+        if (!review) {
+            throw new NotFoundException('Review not found');
+        }
+
+        // cek apakah review sudah ada response
+        const existingResponse = await this.prisma.orgResponse.findUnique({
+            where: { reviewId },
+        });
+
+        if (existingResponse) {
+            // update jika sudah ada
+            return this.prisma.orgResponse.update({
+                where: { reviewId },
+                data: {
+                    body: dto.body,
+                },
+            });
+        }
+
+        // create response baru
+        return this.prisma.orgResponse.create({
+            data: {
+                reviewId,
+                orgUserId,
+                body: dto.body,
+            },
+        });
     }
 }

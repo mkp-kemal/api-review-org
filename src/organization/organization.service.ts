@@ -99,13 +99,26 @@ export class OrganizationService {
     return org;
   }
 
-
   async create(data: OrganizationDto) {
     return this.prisma.organization.create({ data });
   }
 
   async update(id: string, data: any) {
-    await this.findById(id);
+    const org = await this.findById(id);
+
+    if (data.status === 'REJECTED' && !data.rejectedReason) {
+      throw new BadRequestException('Reject reason is required');
+    }
+
+    if (data.status === 'REJECTED' && data.rejectedReason) {
+      const updatedRejectReason = await this.prisma.organization.update({
+        where: { id },
+        data: { rejectedReason: data.rejectedReason },
+      });
+
+      data.rejectedReason = updatedRejectReason.rejectedReason;
+    }
+
     return this.prisma.organization.update({ where: { id }, data });
   }
 

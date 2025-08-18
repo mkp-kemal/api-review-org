@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, UseGuards, Req, Get, Query, Put, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards, Req, Get, Query, Put, BadRequestException, Patch } from '@nestjs/common';
 import { ReviewService } from './review.service';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
@@ -7,6 +7,7 @@ import { OptionalJwtAuthGuard } from 'src/auth/strategies/jwt-optional-auth.guar
 import { Role } from '@prisma/client';
 import { AuditLog } from 'src/audit/audit-log.decorator';
 import { UpdateReviewDto } from 'src/auth/dto/update-review.dto';
+import { CreateResponseReviewDto } from 'src/auth/dto/create-response-review.dto';
 
 @Controller('teams')
 export class ReviewController {
@@ -56,6 +57,17 @@ export class ReviewController {
     @Get('reviews/:teamId')
     async listByTeam(@Param('teamId') teamId: string) {
         return this.reviewService.getReview(teamId);
+    }
+
+    @AuditLog('CREATE', 'REVIEWS_RESPOND')
+    @Patch(':id/respond')
+    @UseGuards(JwtAuthGuard)
+    async respondToReview(
+        @Param('id') reviewId: string,
+        @Body() dto: CreateResponseReviewDto,
+        @Req() req,
+    ) {
+        return this.reviewService.respondToReview(reviewId, req.user.userId, dto);
     }
 
 }
