@@ -23,7 +23,6 @@ export class TeamController {
 
   @AuditLog('READ', 'TEAM_DETAIL')
   @Get(':id')
-  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   getTeamById(@Param('id') id: string) {
     return this.teamService.findById(id);
   }
