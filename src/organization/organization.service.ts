@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { SubscriptionStatus } from '@prisma/client';
+import { SubscriptionPlan } from 'generated/prisma';
 import { PrismaService } from 'prisma/prisma.service';
 import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
 
@@ -16,6 +18,29 @@ export class OrganizationService {
           state ? { state: { equals: state, mode: 'insensitive' } } : {},
           city ? { city: { equals: city, mode: 'insensitive' } } : {},
         ],
+      },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        state: true,
+        website: true,
+        claimedById: true,
+        approvedById: true,
+        rejectedReason: true,
+        updatedAt: true,
+        submittedById: true,
+        createdAt: true,
+        status: true,
+        subscription: {
+          select: {
+            id: true,
+            status: true,
+            plan: true,
+            stripeSubId: true,
+            createdAt: true,
+          },
+        }
       },
       orderBy: { name: 'asc' },
     });
@@ -100,7 +125,22 @@ export class OrganizationService {
   }
 
   async create(data: OrganizationDto) {
-    return this.prisma.organization.create({ data });
+    return this.prisma.organization.create({
+      data: {
+        ...data,
+        subscription: {
+          create: {
+            plan: SubscriptionPlan.BASIC,
+            status: SubscriptionStatus.ACTIVE,
+            stripeCustomerId: 'default',
+            stripeSubId: 'default',
+          },
+        },
+      },
+      include: {
+        subscription: true,
+      },
+    });
   }
 
   async update(id: string, data: any) {
@@ -162,6 +202,7 @@ export class OrganizationService {
               { division: { contains: query, mode: 'insensitive' } },
               { city: { contains: query, mode: 'insensitive' } },
               { state: { contains: query, mode: 'insensitive' } },
+              { name: { contains: query, mode: 'insensitive' } },
               { organization: { name: { contains: query, mode: 'insensitive' } } }
             ]
           }
@@ -175,6 +216,7 @@ export class OrganizationService {
     // Format response sesuai kebutuhan
     const result = teams.map(team => ({
       id: team.id,
+      name: team.name,
       organization: team.organization,
       ageLevel: team.ageLevel,
       division: team.division,
@@ -191,9 +233,7 @@ export class OrganizationService {
 
     for (const row of data) {
       const existing = await this.prisma.organization.findFirst({
-        where: {
-          name: row.name,
-        },
+        where: { name: row.name },
       });
 
       if (existing) {
@@ -208,6 +248,17 @@ export class OrganizationService {
           city: row.city,
           website: row.website,
           status: 'PENDING',
+          subscription: {
+            create: {
+              plan: SubscriptionPlan.BASIC,       
+              status: SubscriptionStatus.ACTIVE,  
+              stripeCustomerId: 'default',        
+              stripeSubId: 'default',             
+            },
+          },
+        },
+        include: {
+          subscription: true,
         },
       });
 

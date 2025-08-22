@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
+import { SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
 import { PrismaService } from "prisma/prisma.service";
 import { TeamDto } from "src/auth/dto/create-team.dto";
 
@@ -8,9 +9,39 @@ export class TeamService {
 
     async findAll() {
         return this.prisma.team.findMany({
-            include: {
-                organization: true,
-            },
+            select: {
+                id: true,
+                name: true,
+                division: true,
+                ageLevel: true,
+                city: true,
+                state: true,
+                createdAt: true,
+                approvedById: true,
+                submittedById: true,
+                roles: true,
+                status: true,
+                updatedAt: true,
+                organization: {
+                    select: {
+                        id: true,
+                        name: true,
+                        city: true,
+                        state: true,
+                        website: true,
+                        createdAt: true
+                    }
+                },
+                subscription: {
+                    select: {
+                        id: true,
+                        status: true,
+                        plan: true,
+                        stripeSubId: true,
+                        createdAt: true,
+                    },
+                }
+            }
         });
     }
 
@@ -24,6 +55,7 @@ export class TeamService {
                 ageLevel: true,
                 city: true,
                 state: true,
+                status: true,
                 organization: {
                     select: {
                         id: true,
@@ -43,6 +75,7 @@ export class TeamService {
                         season_term: true,
                         season_year: true,
                         createdAt: true,
+                        isPublic: true,
                         orgResponse: {
                             select: {
                                 id: true,
@@ -130,18 +163,44 @@ export class TeamService {
 
     async delete(id: string) {
         await this.findById(id);
+
+        const reviewCount = await this.prisma.review.count({
+            where: { teamId: id },
+        });
+
+        if (reviewCount > 0) {
+            throw new BadRequestException('Team has related reviews, cannot delete');
+        }
+
         return this.prisma.team.delete({ where: { id } });
     }
+
 
     async csvCreateMany(data: any[], organizationId: string) {
         const createdTeams = [];
         const skipped: string[] = [];
+        const seenNames = new Set<string>();
 
         for (const row of data) {
+            // ✅ Validasi field wajib
+            if (!row.name || !row.ageLevel || !row.division || !row.state || !row.city) {
+                throw new BadRequestException(
+                    `Missing required fields for team: ${JSON.stringify(row)}`
+                );
+            }
+
+            // ✅ Cek duplikat di CSV (case-insensitive bisa pakai toLowerCase kalau perlu)
+            if (seenNames.has(row.name)) {
+                skipped.push(row.name);
+                continue;
+            }
+            seenNames.add(row.name);
+
+            // ✅ Cek duplikat di DB
             const existing = await this.prisma.team.findFirst({
                 where: {
                     name: row.name,
-                    organizationId: organizationId,
+                    // organizationId,
                 },
             });
 
@@ -150,6 +209,7 @@ export class TeamService {
                 continue;
             }
 
+            // ✅ Create team + subscription
             const team = await this.prisma.team.create({
                 data: {
                     name: row.name,
@@ -157,8 +217,19 @@ export class TeamService {
                     division: row.division,
                     state: row.state,
                     city: row.city,
-                    organizationId: organizationId,
+                    organizationId,
                     status: 'PENDING',
+                    subscription: {
+                        create: {
+                            plan: SubscriptionPlan.BASIC,
+                            status: SubscriptionStatus.ACTIVE,
+                            stripeCustomerId: 'default',
+                            stripeSubId: 'default',
+                        },
+                    },
+                },
+                include: {
+                    subscription: true,
                 },
             });
 
@@ -170,8 +241,6 @@ export class TeamService {
             skipped,
         };
     }
-
-
 
 
 }

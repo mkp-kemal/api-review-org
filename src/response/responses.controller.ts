@@ -9,7 +9,7 @@ import {
     Request
 } from '@nestjs/common';
 import { ResponsesService } from './responses.service';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 import { CreateResponseDto } from 'src/auth/dto/create-response.dto';
 import { UpdateResponseDto } from 'src/auth/dto/update-response.dto';
@@ -21,9 +21,9 @@ import { AuditLog } from 'src/audit/audit-log.decorator';
 export class ResponsesController {
     constructor(private readonly responsesService: ResponsesService) { }
 
-    @AuditLog('CREATE', 'RESPONSE')
+    @AuditLog('CREATE', 'RESPOND')
     @UseGuards(JwtAuthGuard)
-    @Post('reviews/:id/response')
+    @Post('reviews/:id/respond')
     async createResponse(
         @Param('id') reviewId: string,
         @Body() dto: CreateResponseDto,
@@ -32,9 +32,10 @@ export class ResponsesController {
         return this.responsesService.createResponse(reviewId, req.user.userId, dto);
     }
 
-    @AuditLog('UPDATE', 'RESPONSE')
+    @ApiBody({ type: UpdateResponseDto })
+    @AuditLog('UPDATE', 'RESPOND')
     @UseGuards(JwtAuthGuard)
-    @Patch('responses/:id')
+    @Patch('respond/:id')
     async updateResponse(
         @Param('id') id: string,
         @Body() dto: UpdateResponseDto,
@@ -43,9 +44,10 @@ export class ResponsesController {
         return this.responsesService.updateResponse(id, req.user.userId, dto);
     }
 
+    @ApiResponse({ status: 200, description: 'Delete response success' })
     @AuditLog('READ', 'RESPONSE_DETAIL')
     @UseGuards(JwtAuthGuard)
-    @Delete('responses/:id')
+    @Delete('respond/:id')
     async deleteResponse(
         @Param('id') id: string,
         @Request() req

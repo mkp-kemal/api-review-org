@@ -1,4 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import {
+  BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post,
+  UploadedFile, UseGuards, UseInterceptors
+} from "@nestjs/common";
 import { TeamService } from "./team.service";
 import { JwtAuthGuard } from "src/auth/strategies/jwt-auth.guard";
 import { RoleGuard } from "src/auth/strategies/role-guard";
@@ -9,20 +12,24 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import * as csvParser from 'csv-parser';
 import { File as MulterFile } from 'multer';
 import * as streamifier from 'streamifier';
+import { ApiTags, ApiResponse, ApiConsumes, ApiBody } from "@nestjs/swagger";
 
+@ApiTags('Teams')
 @Controller('teams')
 export class TeamController {
   constructor(private teamService: TeamService) { }
 
   @AuditLog('READ', 'TEAMS')
   @Get()
-  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
+  @ApiResponse({ status: 200, description: 'List of all teams with subscription & organization info' })
   getTeams() {
     return this.teamService.findAll();
   }
 
-  @AuditLog('READ', 'TEAM_DETAIL')
   @Get(':id')
+  @ApiResponse({ status: 200, description: 'Details of a specific team including reviews & ratings' })
+  @ApiResponse({ status: 404, description: 'Team not found' })
   getTeamById(@Param('id') id: string) {
     return this.teamService.findById(id);
   }
@@ -30,6 +37,8 @@ export class TeamController {
   @AuditLog('CREATE', 'TEAM')
   @Post()
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+  @ApiResponse({ status: 201, description: 'Team created successfully' })
+  @ApiBody({ type: TeamDto })
   createTeam(@Body() teamDto: TeamDto) {
     return this.teamService.create(teamDto);
   }
@@ -37,6 +46,8 @@ export class TeamController {
   @AuditLog('UPDATE', 'TEAM')
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+  @ApiResponse({ status: 200, description: 'Team updated successfully' })
+  @ApiBody({ type: TeamDto })
   updateTeam(@Param('id') id: string, @Body() teamDto: TeamDto) {
     return this.teamService.update(id, teamDto);
   }
@@ -44,13 +55,29 @@ export class TeamController {
   @AuditLog('DELETE', 'TEAM')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   @Delete(':id')
+  @ApiResponse({ status: 200, description: 'Team deleted successfully' })
+  @ApiResponse({ status: 400, description: 'Cannot delete team with related reviews' })
   deleteTeam(@Param('id') id: string) {
     return this.teamService.delete(id);
   }
 
   @Post('upload-csv')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadCsv(@UploadedFile() file: MulterFile, @Body('organizationId') organizationId: string,) {
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string', example: 'org_123' },
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'CSV uploaded and processed successfully' })
+  async uploadCsv(
+    @UploadedFile() file: MulterFile,
+    @Body('organizationId') organizationId: string,
+  ) {
     const results: any[] = [];
 
     if (!file) {

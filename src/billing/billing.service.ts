@@ -19,22 +19,18 @@ export class BillingService {
   ) {
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      include: { subscriptions: true },
+      include: { subscription: true },
     });
     if (!organization) throw new NotFoundException('Organization not found');
 
-    if (organization.subscriptions.length > 0) {
+    if (organization.subscription) {
       throw new BadRequestException('Organization already has an active subscription');
     }
 
-
     let customerId: string;
-    const activeSub = organization.subscriptions.find(
-      (sub) => sub.status === SubscriptionStatus.ACTIVE,
-    );
 
-    if (activeSub) {
-      customerId = activeSub.stripeCustomerId;
+    if (organization.subscription?.status === SubscriptionStatus.ACTIVE) {
+      customerId = organization.subscription.stripeCustomerId;
     } else {
       const customer = await this.stripeService.createCustomer(
         organization.name,
@@ -63,13 +59,14 @@ export class BillingService {
         organizationId,
         plan,
         status: SubscriptionStatus.ACTIVE,
-        stripeCustomerId: "test",
-        stripeSubId: "twertyu",
+        stripeCustomerId: customerId,
+        stripeSubId: "twertyu", // nanti diisi real stripe subId
       },
     });
 
-  return { checkoutUrl: session.url, subscriptionId: subscription.id };
+    return { checkoutUrl: session.url, subscriptionId: subscription.id };
   }
+
 
   async confirmPayment(paymentIntentId: string) {
     const paymentIntent = await this.stripeService.confirmPaymentIntent(paymentIntentId);
@@ -171,16 +168,17 @@ export class BillingService {
   async getSubscriptionStatus(organizationId: string) {
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      include: { subscriptions: true },
+      include: { subscription: true },
     });
 
     if (!organization) throw new NotFoundException('Organization not found');
 
     return {
       organizationId,
-      subscription: organization.subscriptions[0] || null,
+      subscription: organization.subscription || null,
     };
   }
+
 
   private getPriceIdForPlan(plan: SubscriptionPlan): string {
     switch (plan) {

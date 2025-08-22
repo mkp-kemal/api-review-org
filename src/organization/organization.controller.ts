@@ -10,11 +10,51 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import * as csvParser from 'csv-parser';
 import { File as MulterFile } from 'multer';
 import * as streamifier from 'streamifier';
+import { ApiBody, ApiOkResponse, ApiResponse, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Organization')
 @Controller('orgs')
 export class OrganizationController {
   constructor(private orgService: OrganizationService) { }
 
+  @ApiOkResponse({
+    description: 'List of organizations',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: 'cmegvq28o0009gdyj9r5vhdb1' },
+          name: { type: 'string', example: 'Alpha Sports' },
+          city: { type: 'string', example: 'Los Angeles' },
+          state: { type: 'string', example: 'California' },
+          website: { type: 'string', example: 'alphasports.com' },
+          claimedById: { type: 'string', nullable: true, example: null },
+          approvedById: { type: 'string', nullable: true, example: null },
+          rejectedReason: { type: 'string', nullable: true, example: null },
+          updatedAt: { type: 'string', format: 'date-time', example: '2025-08-21T16:10:20.403Z' },
+          submittedById: { type: 'string', nullable: true, example: null },
+          createdAt: { type: 'string', format: 'date-time', example: '2025-08-18T08:55:05.688Z' },
+          status: { type: 'string', example: 'APPROVED' },
+          subscription: {
+            oneOf: [
+              { type: 'null' },
+              {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', example: 'subs1' },
+                  status: { type: 'string', example: 'ACTIVE' },
+                  plan: { type: 'string', example: 'BASIC' },
+                  stripeSubId: { type: 'string', nullable: true, example: null },
+                  createdAt: { type: 'string', format: 'date-time', example: '2025-08-20T21:22:56.000Z' },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+  })
   @AuditLog('READ', 'ORGANIZATION')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Get()
@@ -26,6 +66,86 @@ export class OrganizationController {
     return this.orgService.findAll({ name, state, city });
   }
 
+  @ApiOkResponse({
+    description: 'Organization detail with teams and reviews',
+    schema: {
+      type: 'object',
+      properties: {
+        claimedById: { type: 'string', nullable: true, example: null },
+        name: { type: 'string', example: 'Dallas TEST' },
+        city: { type: 'string', example: 'Ipsum' },
+        state: { type: 'string', example: 'DKI Jakarta' },
+        website: { type: 'string', example: 'https://mkemalp.icu' },
+        teams: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', example: 'Team A' },
+              ageLevel: { type: 'string', example: '12U' },
+              division: { type: 'string', example: 'Division 1' },
+              city: { type: 'string', example: 'Jakarta' },
+              state: { type: 'string', example: 'DKI' },
+              status: { type: 'string', example: 'APPROVED' },
+              reviews: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string', example: 'Great coaching!' },
+                    body: { type: 'string', example: 'The team has improved a lot this season.' },
+                    season_term: { type: 'string', example: 'SUMMER' },
+                    season_year: { type: 'integer', example: 2024 },
+                    isPublic: { type: 'boolean', example: false },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    editedAt: { type: 'string', format: 'date-time', nullable: true },
+                    user: {
+                      type: 'object',
+                      properties: {
+                        email: { type: 'string', nullable: true },
+                        role: { type: 'string', example: 'SITE_ADMIN' },
+                      },
+                    },
+                    rating: {
+                      type: 'object',
+                      properties: {
+                        coaching: { type: 'number', example: 5 },
+                        development: { type: 'number', example: 4 },
+                        transparency: { type: 'number', example: 5 },
+                        culture: { type: 'number', example: 5 },
+                        safety: { type: 'number', example: 5 },
+                        overall: { type: 'number', example: 4.8 },
+                      },
+                    },
+                    orgResponse: {
+                      oneOf: [
+                        { type: 'null' },
+                        {
+                          type: 'object',
+                          properties: {
+                            body: { type: 'string', example: 'Thanks u all' },
+                            createdAt: { type: 'string', format: 'date-time' },
+                            user: {
+                              type: 'object',
+                              properties: {
+                                email: { type: 'string', example: 'mkp.kemal@gmail.com' },
+                                role: { type: 'string', example: 'SITE_ADMIN' },
+                              },
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    flags: { type: 'array', items: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
   @AuditLog('READ', 'ORGANIZATION_DETAIL')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Get(':id')
@@ -33,6 +153,8 @@ export class OrganizationController {
     return this.orgService.findById(id);
   }
 
+  @ApiResponse({ status: 201, description: 'Organization created successfully' })
+  @ApiBody({ type: OrganizationDto })
   @AuditLog('CREATE', 'ORGANIZATION')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Post()
@@ -40,6 +162,8 @@ export class OrganizationController {
     return this.orgService.create(data);
   }
 
+  @ApiResponse({ status: 201, description: 'Organization updated successfully' })
+  @ApiBody({ type: OrganizationDto })
   @AuditLog('UPDATE', 'ORGANIZATION')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Patch(':id')
@@ -47,6 +171,16 @@ export class OrganizationController {
     return this.orgService.update(id, data);
   }
 
+  @ApiResponse({ status: 201, description: 'Organization claimed successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Organization claimed successfully',
+    schema: {
+      example: {
+        claimedById: 'user_456',
+      },
+    },
+  })
   @AuditLog('UPDATE', 'ORGANIZATION_CLAIM')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Patch(':id/claim')
@@ -56,6 +190,7 @@ export class OrganizationController {
     return this.orgService.claimOrg(id, req.user.userId, emailDomain);
   }
 
+  @ApiResponse({ status: 201, description: 'Organization deleted successfully' })
   @AuditLog('DELETE', 'ORGANIZATION')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Delete(':id')
@@ -71,28 +206,29 @@ export class OrganizationController {
     return this.orgService.searchTeamsAndOrganizations(search || '');
   }
 
-   @Post('upload-csv')
-    @UseInterceptors(FileInterceptor('file'))
-    async uploadCsv(@UploadedFile() file: MulterFile) {
-      const results: any[] = [];
+  @AuditLog('CREATE', 'ORGANIZATION_CSV')
+  @Post('upload-csv')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadCsv(@UploadedFile() file: MulterFile) {
+    const results: any[] = [];
 
-      if (!file) {
-        throw new BadRequestException('No file uploaded');
-      }
-  
-      return new Promise((resolve, reject) => {
-        streamifier.createReadStream(file.buffer)
-          .pipe(csvParser())
-          .on('data', (row: any) => results.push(row))
-          .on('end', async () => {
-            try {
-              const created = await this.orgService.csvCreateMany(results);
-              resolve({ message: 'CSV processed successfully', data: created });
-            } catch (err) {
-              reject(err);
-            }
-          })
-          .on('error', (err) => reject(err));
-      });
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
     }
+
+    return new Promise((resolve, reject) => {
+      streamifier.createReadStream(file.buffer)
+        .pipe(csvParser())
+        .on('data', (row: any) => results.push(row))
+        .on('end', async () => {
+          try {
+            const created = await this.orgService.csvCreateMany(results);
+            resolve({ message: 'CSV processed successfully', data: created });
+          } catch (err) {
+            reject(err);
+          }
+        })
+        .on('error', (err) => reject(err));
+    });
+  }
 }

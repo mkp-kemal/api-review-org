@@ -14,7 +14,6 @@ export class ReviewService {
         teamId: string,
         dto: CreateReviewDto,
     ) {
-        // Pastikan user ada, kalau tidak buat user ANONYMOUS
         let user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
             user = await this.prisma.user.create({
@@ -66,7 +65,7 @@ export class ReviewService {
                 season_term: dto.season_term,
                 season_year: dto.season_year,
                 age_level_at_review: team.ageLevel,
-                // isPublic: dto.isPublic ?? false,
+                isPublic: true,
             },
         });
 
@@ -98,6 +97,8 @@ export class ReviewService {
 
 
     async updateReview(userId: string, teamId: string, dto: UpdateReviewDto) {
+        console.log(dto);
+
         const review = await this.prisma.review.findUnique({
             where: { userId_teamId_season_term_season_year: { userId, teamId, season_term: dto.season_term, season_year: dto.season_year } },
             include: { rating: true },
@@ -138,26 +139,46 @@ export class ReviewService {
         });
     }
 
+    async updateReviewStatus(reviewId: string, isPublic: boolean) {
+        const review = await this.prisma.review.findFirst({
+            where: { id: reviewId },
+        });
+        if (!review) throw new NotFoundException('Review not found');
+
+        return this.prisma.review.update({
+            where: { id: reviewId },
+            data: {
+                isPublic,
+                editedAt: new Date(),
+            },
+            include: {
+                rating: true,
+                orgResponse: true,
+                team: { include: { organization: true } },
+            },
+        });
+    }
+
+
     async getReviews(sort: 'recent' | 'rating' = 'recent') {
         const orderBy =
             sort === 'rating' ? { rating: { overall: 'desc' as const } } : { createdAt: 'desc' as const };
 
         return this.prisma.review.findMany({
-            where: { isPublic: true },
+            // where: { isPublic: true },
             orderBy,
             include: {
                 rating: true,
                 orgResponse: {
                     select: {
-                      body: true,
-                      createdAt: true,  
-                      user: {
-                        select: {
-                          email: true,
-                        },
-                      }
+                        body: true,
+                        createdAt: true,
+                        user: {
+                            select: {
+                                email: true,
+                            },
+                        }
                     },
-
                 },
                 team: {
                     include: {

@@ -228,7 +228,7 @@ export class AuthService {
             where: { id: tokenId },
             data: { revoked: true },
         });
-        return { message: 'Logged out' };
+        return { message: 'Logged out successfully' };
     }
 
     private msFromExpString(exp: string): number {

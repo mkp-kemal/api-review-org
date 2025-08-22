@@ -73,12 +73,14 @@ model Organization {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  claimedBy     User?          @relation("OrgClaims", fields: [claimedById], references: [id])
-  submittedBy   User?          @relation("OrgSubmittedBy", fields: [submittedById], references: [id])
-  approvedBy    User?          @relation("OrgApprovedBy", fields: [approvedById], references: [id])
-  subscriptions Subscription[]
-  teams         Team[]
-  roles         UserOrgRole[]
+  claimedBy   User?         @relation("OrgClaims", fields: [claimedById], references: [id])
+  submittedBy User?         @relation("OrgSubmittedBy", fields: [submittedById], references: [id])
+  approvedBy  User?         @relation("OrgApprovedBy", fields: [approvedById], references: [id])
+  teams       Team[]
+  roles       UserOrgRole[]
+
+  // Relasi ke Subscription (satu aktif, bisa default BASIC)
+  subscription Subscription?
 }
 
 model Team {
@@ -96,22 +98,24 @@ model Team {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization  Organization   @relation(fields: [organizationId], references: [id])
-  submittedBy   User?          @relation("TeamSubmittedBy", fields: [submittedById], references: [id])
-  approvedBy    User?          @relation("TeamApprovedBy", fields: [approvedById], references: [id])
-  reviews       Review[]
-  roles         UserTeamRole[]
-  subscriptions Subscription[]
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  submittedBy  User?          @relation("TeamSubmittedBy", fields: [submittedById], references: [id])
+  approvedBy   User?          @relation("TeamApprovedBy", fields: [approvedById], references: [id])
+  reviews      Review[]
+  roles        UserTeamRole[]
+
+  // Relasi ke Subscription
+  subscription Subscription?
 }
 
 model Subscription {
   id               String             @id @default(cuid())
-  organizationId   String? // nullable jika team-level subscription
-  teamId           String? // nullable if org-level subscription
-  plan             SubscriptionPlan
+  organizationId   String?            @unique // unique biar 1 org 1 subscription
+  teamId           String?            @unique // unique biar 1 team 1 subscription
+  plan             SubscriptionPlan   @default(BASIC) // default BASIC
   status           SubscriptionStatus @default(ACTIVE)
-  stripeCustomerId String
-  stripeSubId      String
+  stripeCustomerId String?
+  stripeSubId      String?
   createdAt        DateTime           @default(now())
 
   organization Organization? @relation(fields: [organizationId], references: [id])
@@ -138,7 +142,6 @@ model Review {
 
   @@unique([userId, teamId, season_term, season_year])
 }
-
 
 model Rating {
   id           String @id @default(cuid())
