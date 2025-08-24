@@ -6,7 +6,8 @@ import {
     UseGuards,
     Request,
     Res,
-    Body
+    Body,
+    Delete
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -74,10 +75,15 @@ export class AdminController {
         return this.adminService.exportFlagsToCsv(res);
     }
 
-    @AuditLog('READ', 'AUDIT_LOGS')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
     @Get('audit-logs')
     async getAuditLogs(@Request() req) {
         return this.adminService.getAuditLogs();
+    }
+
+    @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+    @Delete('audit-logs')
+    async deleteAuditLogs(@Request() req) {
+        return this.adminService.deleteAuditLogs();
     }
 }

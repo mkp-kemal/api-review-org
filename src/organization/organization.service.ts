@@ -142,8 +142,7 @@ export class OrganizationService {
     });
   }
 
-  async update(id: string, data: any) {
-    const org = await this.findById(id);
+  async update(id: string, data: any, userId: string) {
 
     if (data.status === 'REJECTED' && !data.rejectedReason) {
       throw new BadRequestException('Reject reason is required');
@@ -158,8 +157,16 @@ export class OrganizationService {
       data.rejectedReason = updatedRejectReason.rejectedReason;
     }
 
-    return this.prisma.organization.update({ where: { id }, data });
+    if (data.status === 'APPROVED') {
+      data.approvedById = userId;
+    }
+
+    return this.prisma.organization.update({
+      where: { id },
+      data,
+    });
   }
+
 
   async claimOrg(orgId: string, userId: string, emailDomain: string) {
     const org = await this.findById(orgId);
@@ -249,10 +256,10 @@ export class OrganizationService {
           status: 'PENDING',
           subscription: {
             create: {
-              plan: SubscriptionPlan.BASIC,       
-              status: SubscriptionStatus.ACTIVE,  
-              stripeCustomerId: 'default',        
-              stripeSubId: 'default',             
+              plan: SubscriptionPlan.BASIC,
+              status: SubscriptionStatus.ACTIVE,
+              stripeCustomerId: 'default',
+              stripeSubId: 'default',
             },
           },
         },

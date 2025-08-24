@@ -1,5 +1,6 @@
 import {
   BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post,
+  Req,
   UploadedFile, UseGuards, UseInterceptors
 } from "@nestjs/common";
 import { TeamService } from "./team.service";
@@ -19,7 +20,7 @@ import { ApiTags, ApiResponse, ApiConsumes, ApiBody } from "@nestjs/swagger";
 export class TeamController {
   constructor(private teamService: TeamService) { }
 
-  @AuditLog('READ', 'TEAMS')
+  // @AuditLog('READ', 'TEAMS')
   @Get()
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
   @ApiResponse({ status: 200, description: 'List of all teams with subscription & organization info' })
@@ -48,8 +49,8 @@ export class TeamController {
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   @ApiResponse({ status: 200, description: 'Team updated successfully' })
   @ApiBody({ type: TeamDto })
-  updateTeam(@Param('id') id: string, @Body() teamDto: TeamDto) {
-    return this.teamService.update(id, teamDto);
+  updateTeam(@Param('id') id: string, @Body() teamDto: TeamDto, @Req() req) {
+    return this.teamService.update(id, teamDto, req.user.userId);
   }
 
   @AuditLog('DELETE', 'TEAM')

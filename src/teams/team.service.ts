@@ -82,10 +82,10 @@ export class TeamService {
                                 id: true,
                                 body: true,
                                 user: {
-                                    select: { 
+                                    select: {
                                         email: true,
                                         role: true
-                                     }
+                                    }
                                 },
                                 createdAt: true
                             }
@@ -160,9 +160,29 @@ export class TeamService {
         });
     }
 
-    async update(id: string, data: any) {
-        await this.findById(id);
-        return this.prisma.team.update({ where: { id }, data });
+    async update(id: string, data: any, userId: string) {
+
+        if (data.status === 'REJECTED' && !data.rejectedReason) {
+            throw new BadRequestException('Reject reason is required');
+        }
+
+        if (data.status === 'REJECTED' && data.rejectedReason) {
+            const updatedRejectReason = await this.prisma.team.update({
+                where: { id },
+                data: { rejectedReason: data.rejectedReason },
+            });
+
+            data.rejectedReason = updatedRejectReason.rejectedReason;
+        }
+
+        if (data.status === 'APPROVED') {
+            data.approvedById = userId;
+        }
+
+        return this.prisma.team.update({
+            where: { id },
+            data,
+        });
     }
 
     async delete(id: string) {

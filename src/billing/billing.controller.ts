@@ -24,40 +24,32 @@ export class BillingController {
   //   );
   // }
 
-@Post('webhook')
-async handleWebhook(@Req() req: Request, @Res() res: Response) {
-  const signature = req.headers['stripe-signature'] as string;
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  @Post('webhook')
+  async handleWebhook(@Req() req: Request, @Res() res: Response) {
+    const signature = req.headers['stripe-signature'] as string;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  try {
-    // 🔍 Debug tipe body
-    console.log("typeof req.body:", typeof req.body);
-    console.log("isBuffer:", Buffer.isBuffer(req.body));
-    console.log("constructor:", req.body?.constructor?.name);
+    try {
+      let event = Stripe.webhooks.constructEvent(
+        (req as any).body,
+        signature,
+        webhookSecret
+      );
 
-    console.log("Webhook Secret from env:", webhookSecret);
-    console.log("Signature header:", signature);
+      console.log('EVENT123456789', event.type);
 
-    let event = Stripe.webhooks.constructEvent(
-      (req as any).body,
-      signature,
-      webhookSecret
-    );
+      if (event.type === 'checkout.session.completed') {
+        console.log('✅ Checkout session completed:', event.data.object);
+      } else if (event.type === 'invoice.payment_succeeded') {
+        console.log('✅ Invoice paid:', event.data.object);
+      }
 
-    console.log('EVENT123456789', event.type);
-
-    if (event.type === 'checkout.session.completed') {
-      console.log('✅ Checkout session completed:', event.data.object);
-    } else if (event.type === 'invoice.payment_succeeded') {
-      console.log('✅ Invoice paid:', event.data.object);
+      return res.status(200).json({ received: true });
+    } catch (err) {
+      console.error('❌ Webhook Error:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
     }
-
-    return res.status(200).json({ received: true });
-  } catch (err) {
-    console.error('❌ Webhook Error:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-}
 
 
   @ApiOperation({ summary: 'Create a new subscription (with checkout)' })

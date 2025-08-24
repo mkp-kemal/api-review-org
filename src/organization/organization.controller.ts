@@ -55,7 +55,7 @@ export class OrganizationController {
       },
     },
   })
-  @AuditLog('READ', 'ORGANIZATION')
+  // @AuditLog('READ', 'ORGANIZATION')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Get()
   async listOrgs(
@@ -167,8 +167,8 @@ export class OrganizationController {
   @AuditLog('UPDATE', 'ORGANIZATION')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Patch(':id')
-  async updateOrg(@Param('id') id: string, @Body() data: OrganizationDto) {
-    return this.orgService.update(id, data);
+  async updateOrg(@Param('id') id: string, @Body() data: OrganizationDto, @Req() req) {
+    return this.orgService.update(id, data, req.user.userId);
   }
 
   @ApiResponse({ status: 201, description: 'Organization claimed successfully' })
