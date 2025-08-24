@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { SubscriptionStatus } from '@prisma/client';
-import { SubscriptionPlan } from 'generated/prisma';
+import { SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
 

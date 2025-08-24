@@ -67,6 +67,7 @@ export class TeamService {
                     }
                 },
                 reviews: {
+                    where: { isPublic: true },
                     select: {
                         id: true,
                         age_level_at_review: true,
@@ -81,7 +82,10 @@ export class TeamService {
                                 id: true,
                                 body: true,
                                 user: {
-                                    select: { email: true }
+                                    select: { 
+                                        email: true,
+                                        role: true
+                                     }
                                 },
                                 createdAt: true
                             }

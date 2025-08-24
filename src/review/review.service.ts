@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateResponseReviewDto } from 'src/auth/dto/create-response-review.dto';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
@@ -15,6 +15,7 @@ export class ReviewService {
         dto: CreateReviewDto,
     ) {
         let user = await this.prisma.user.findUnique({ where: { id: userId } });
+        
         if (!user) {
             user = await this.prisma.user.create({
                 data: {
@@ -27,6 +28,9 @@ export class ReviewService {
             });
         }
 
+        if (["SITE_ADMIN", "ORG_ADMIN", "TEAM_ADMIN"].includes(user.role)) {
+            throw new ForbiddenException("Admins are not allowed to submit reviews");
+        }
 
         // Cek id team
         const team = await this.prisma.team.findUnique({ where: { id: teamId } });
@@ -160,12 +164,20 @@ export class ReviewService {
     }
 
 
-    async getReviews(sort: 'recent' | 'rating' = 'recent') {
+    async getReviews(sort: 'recent' | 'rating' = 'recent', isByPublic = true) {
         const orderBy =
-            sort === 'rating' ? { rating: { overall: 'desc' as const } } : { createdAt: 'desc' as const };
+            sort === 'rating'
+                ? { rating: { overall: 'desc' as const } }
+                : { createdAt: 'desc' as const };
+
+        const where: any = {};
+        
+        if (isByPublic) {
+            where.isPublic = true;
+        }
 
         return this.prisma.review.findMany({
-            // where: { isPublic: true },
+            where,
             orderBy,
             include: {
                 rating: true,
@@ -174,10 +186,8 @@ export class ReviewService {
                         body: true,
                         createdAt: true,
                         user: {
-                            select: {
-                                email: true,
-                            },
-                        }
+                            select: { email: true },
+                        },
                     },
                 },
                 team: {
@@ -186,9 +196,7 @@ export class ReviewService {
                     },
                 },
                 user: {
-                    select: {
-                        email: true,
-                    },
+                    select: { email: true },
                 },
             },
         });
