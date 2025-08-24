@@ -24,30 +24,32 @@ export class BillingController {
   //   );
   // }
 
-  @Post('webhook')
-  async handleWebhook(@Req() req: StripeRequest, @Res() res: Response) {
+@Post('webhook')
+  async handleWebhook(@Req() req: Request, @Res() res: Response) {
+    const signature = req.headers['stripe-signature'] as string;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    let event: Stripe.Event;
+
     try {
-      const body = req.body;
-      const headerList = req.headers;
+      event = Stripe.webhooks.constructEvent(
+        (req as any).body,  // ⚡ ini buffer, bukan object
+        signature,
+        webhookSecret
+      );
 
-      const signature = headerList['stripe-signature'] as string;
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-      if (!webhookSecret) throw new Error('Stripe webhook secret is not set');
-
-      const event = Stripe.webhooks.constructEvent(body, signature, webhookSecret);
-
-      console.log(event, 'ass');
-
+      console.log('EVENT123456789', event.type);
 
       if (event.type === 'checkout.session.completed') {
-        console.log('Checkout session completed:', event.data.object);
+        console.log('✅ Checkout session completed:', event.data.object);
+      } else if (event.type === 'invoice.payment_succeeded') {
+        console.log('✅ Invoice paid:', event.data.object);
       }
 
-      res.status(200).json({ received: true });
-    } catch (error) {
-      console.error(error);
-      res.status(400).json({ error: error.message });
+      return res.status(200).json({ received: true });
+    } catch (err) {
+      console.error('❌ Webhook Error:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
     }
   }
 

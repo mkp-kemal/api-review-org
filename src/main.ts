@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as bodyParser from 'body-parser';
+import { StripeRawBodyMiddleware } from './auth/strategies/stripe-raw-body.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -13,6 +14,7 @@ async function bootstrap() {
     credentials: true
   });
 
+  // app.use(new StripeRawBodyMiddleware().use);
   // Add raw body for Stripe webhook
   app.use('/billing/webhook', bodyParser.raw({ type: 'application/json' }));
 
