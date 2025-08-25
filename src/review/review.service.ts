@@ -26,6 +26,17 @@ export class ReviewService {
                     isVerified: false,
                 },
             });
+
+            await this.prisma.auditLog.create({
+                data: {
+                    actor: {
+                        connect: { id: userId || 'ANONYMOUS' }
+                    },
+                    action: 'CREATE',
+                    targetType: 'USER_ON_REVIEW',
+                    targetId: userId,
+                },
+            });
         }
 
         if (["SITE_ADMIN", "ORG_ADMIN", "TEAM_ADMIN"].includes(user.role)) {
@@ -93,6 +104,17 @@ export class ReviewService {
                 rating: true,
                 orgResponse: true,
                 team: { include: { organization: true } },
+            },
+        });
+
+        await this.prisma.auditLog.create({
+            data: {
+                actor: {
+                    connect: { id: userId || 'ANONYMOUS' }
+                },
+                action: 'CREATE',
+                targetType: 'REVIEW',
+                targetId: review.id,
             },
         });
 
@@ -198,6 +220,17 @@ export class ReviewService {
                 user: {
                     select: { email: true },
                 },
+                flags: {
+                    select:{
+                        reporter: {
+                            select: {
+                                email: true
+                            }
+                        },
+                        reason: true,
+                        createdAt: true
+                    }
+                }
             },
         });
     }

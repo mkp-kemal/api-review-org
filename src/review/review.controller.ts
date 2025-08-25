@@ -27,7 +27,9 @@ export class ReviewController {
         @Body() dto: CreateReviewDto & { userId?: string },
     ) {
         const userId = req.user?.userId ?? dto.userId;
+
         if (!userId) throw new BadRequestException('userId is required');
+
         return this.reviewService.createReview(userId, teamId, dto);
     }
 

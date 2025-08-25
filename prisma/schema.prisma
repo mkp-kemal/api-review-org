@@ -164,6 +164,8 @@ model Flag {
   createdAt      DateTime   @default(now())
   reporter       User       @relation("FlagReporter", fields: [reporterUserId], references: [id])
   review         Review     @relation(fields: [reviewId], references: [id])
+
+  @@unique([reviewId, reporterUserId]) // 🚨 prevent duplicate flag
 }
 
 model OrgResponse {

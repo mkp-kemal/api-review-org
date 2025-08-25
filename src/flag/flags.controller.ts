@@ -1,5 +1,5 @@
 // flags.controller.ts
-import { Controller, Post, Param, Body, Get, Patch, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Param, Body, Get, Patch, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { FlagsService } from './flags.service';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 import { CreateFlagDto } from 'src/auth/dto/create-flag.dto';
@@ -7,16 +7,20 @@ import { UpdateFlagDto } from 'src/auth/dto/update-flag.dto';
 import { RoleGuard } from 'src/auth/strategies/role-guard';
 import { Role } from '@prisma/client';
 import { AuditLog } from 'src/audit/audit-log.decorator';
+import { OptionalJwtAuthGuard } from 'src/auth/strategies/jwt-optional-auth.guard';
 
 @Controller()
 export class FlagsController {
     constructor(private readonly flagsService: FlagsService) { }
 
-    @AuditLog('CREATE', 'FLAG')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(OptionalJwtAuthGuard)
     @Post('reviews/:id/flag')
-    async flagReview(@Param('id') reviewId: string, @Body() dto: CreateFlagDto, @Request() req) {
-        return this.flagsService.flagReview(reviewId, req.user.userId, dto);
+    async flagReview(@Param('id') reviewId: string, @Body() dto: CreateFlagDto & { userId?: string }, @Request() req) {
+        const userId = req.user?.userId ?? dto.userId;
+
+        if (!userId) throw new BadRequestException('userId is required');
+
+        return this.flagsService.flagReview(reviewId, userId, dto);
     }
 
     @AuditLog('READ', 'FLAG')
@@ -34,7 +38,7 @@ export class FlagsController {
     }
 
     @AuditLog('CREATE', 'FLAG_RESOLVE')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(OptionalJwtAuthGuard)
     @Post('admin/flags/:id/resolve')
     async resolveFlag(@Param('id') id: string) {
         return this.flagsService.resolveFlag(id);

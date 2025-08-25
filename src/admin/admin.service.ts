@@ -124,6 +124,7 @@ export class AdminService {
         metadata: true,
         actor: {
           select: {
+            id: true,
             email: true,
             role: true
           }

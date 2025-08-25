@@ -7,25 +7,77 @@ import { UpdateFlagDto } from 'src/auth/dto/update-flag.dto';
 
 @Injectable()
 export class FlagsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async flagReview(reviewId: string, userId: string, dto: CreateFlagDto) {
-    // Validate userId exists
-    if (!userId) {
-      throw new BadRequestException('User ID is required');
-    }
-
-    // Check review exists
-    const review = await this.prisma.review.findUnique({ 
-      where: { id: reviewId } 
-    });
-    if (!review) throw new NotFoundException('Review not found');
-
-    // Check user exists
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { id: userId }
     });
-    if (!user) throw new NotFoundException('User not found');
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          id: userId,
+          role: 'ANONYMOUS',
+          email: null,
+          passwordHash: null,
+          isVerified: false,
+        },
+      });
+
+      await this.prisma.auditLog.create({
+        data: {
+          actor: {
+            connect: { id: userId || 'ANONYMOUS' }
+          },
+          action: 'CREATE',
+          targetType: 'USER_ON_FLAG',
+          targetId: reviewId,
+          metadata: {
+            reason: dto.reason,
+          }
+        },
+      });
+    }
+
+
+    if (!reviewId) {
+      throw new BadRequestException('Review ID is required');
+    }
+
+    if (!dto.reason) {
+      throw new BadRequestException('Reason is required');
+    }
+
+    const review = await this.prisma.review.findUnique({ where: { id: reviewId } });
+    if (!review) throw new NotFoundException('Review not found');
+
+    const existingFlag = await this.prisma.flag.findUnique({
+      where: {
+        reviewId_reporterUserId: {  
+          reviewId,
+          reporterUserId: userId,
+        },
+      },
+    });
+
+    if (existingFlag) {
+      throw new BadRequestException('You have already flagged this review.');
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        actor: {
+          connect: { id: userId || 'ANONYMOUS' }
+        },
+        action: 'CREATE',
+        targetType: 'FLAG',
+        targetId: reviewId,
+        metadata: {
+          reason: dto.reason,
+        }
+      },
+    });
 
     return this.prisma.flag.create({
       data: {
@@ -34,7 +86,8 @@ export class FlagsService {
         reason: dto.reason,
       },
     });
-}
+  }
+
 
   async listFlags() {
     return this.prisma.flag.findMany({
@@ -69,16 +122,16 @@ export class FlagsService {
     });
   }
 
- async updateFlagStatus(id: string, dto: UpdateFlagDto) {
-  if (!Object.values(FlagStatus).includes(dto.status)) {
-    throw new BadRequestException('Invalid status value');
-  }
-  
-  const result = await this.prisma.flag.update({
-    where: { id },
-    data: { status: dto.status },
-  });
+  async updateFlagStatus(id: string, dto: UpdateFlagDto) {
+    if (!Object.values(FlagStatus).includes(dto.status)) {
+      throw new BadRequestException('Invalid status value');
+    }
 
-  return result;
-}
+    const result = await this.prisma.flag.update({
+      where: { id },
+      data: { status: dto.status },
+    });
+
+    return result;
+  }
 }
