@@ -104,7 +104,7 @@ export class ReviewController {
         return this.reviewService.respondToReview(reviewId, req.user.userId, dto);
     }
 
-
+    @ApiOperation({ summary: 'List years of reviews 5 years ago' })
     @Get('years')
     async listByYear() {
         const currentYear = new Date().getFullYear();

@@ -222,11 +222,13 @@ export class ReviewService {
                 },
                 flags: {
                     select:{
+                        id: true,
                         reporter: {
                             select: {
                                 email: true
                             }
                         },
+                        status: true,
                         reason: true,
                         createdAt: true
                     }

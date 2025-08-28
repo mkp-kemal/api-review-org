@@ -29,7 +29,20 @@ export class AdminService {
 
   // Users
   async getAllUsers() {
-    return this.prisma.user.findMany();
+    return this.prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        flags: true,
+        reviews: true,
+        orgClaims: true,
+        isVerified: true,
+        isBanned: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    });
   }
 
   async toggleUserBan(targetUserId: string, dto: AdminUserDto, currentUserId: string) {

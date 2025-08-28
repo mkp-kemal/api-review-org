@@ -46,7 +46,7 @@ export class TeamController {
 
   @AuditLog('UPDATE', 'TEAM')
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
   @ApiResponse({ status: 200, description: 'Team updated successfully' })
   @ApiBody({ type: TeamDto })
   updateTeam(@Param('id') id: string, @Body() teamDto: TeamDto, @Req() req) {
@@ -99,5 +99,11 @@ export class TeamController {
         })
         .on('error', (err) => reject(err));
     });
+  }
+
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+  @Get('access/claim')
+  async getTeamsWithAccess(@Req() req) {
+    return this.teamService.getTeamsWithAccess(req.user.userId, req.user.role);
   }
 }

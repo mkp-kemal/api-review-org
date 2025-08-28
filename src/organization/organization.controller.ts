@@ -156,7 +156,7 @@ export class OrganizationController {
   @ApiResponse({ status: 201, description: 'Organization created successfully' })
   @ApiBody({ type: OrganizationDto })
   @AuditLog('CREATE', 'ORGANIZATION')
-  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   @Post()
   async createOrg(@Body() data: OrganizationDto) {
     return this.orgService.create(data);
@@ -182,7 +182,7 @@ export class OrganizationController {
     },
   })
   @AuditLog('UPDATE', 'ORGANIZATION_CLAIM')
-  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.REVIEWER, Role.SITE_ADMIN]))
   @Patch(':id/claim')
   async claimOrg(@Param('id') id: string, @Req() req) {
     const emailDomain = req.user.email?.split('@')[1];
@@ -230,5 +230,11 @@ export class OrganizationController {
         })
         .on('error', (err) => reject(err));
     });
+  }
+
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
+  @Get('access/claim')
+  async getOrganizationWithAccess(@Req() req) {
+    return this.orgService.getOrganizationWithAccess(req.user.userId);
   }
 }

@@ -28,6 +28,7 @@ model User {
   flags         Flag[]         @relation("FlagReporter")
   orgResponses  OrgResponse[]
   orgClaims     Organization[] @relation("OrgClaims")
+  teamClaims    Team[]         @relation("TeamClaims")
   refreshTokens RefreshToken[]
   reviews       Review[]
 
@@ -95,9 +96,11 @@ model Team {
   submittedById  String?
   approvedById   String?
   rejectedReason String?
+  claimedById    String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  claimedBy    User?          @relation("TeamClaims", fields: [claimedById], references: [id])
   organization Organization   @relation(fields: [organizationId], references: [id])
   submittedBy  User?          @relation("TeamSubmittedBy", fields: [submittedById], references: [id])
   approvedBy   User?          @relation("TeamApprovedBy", fields: [approvedById], references: [id])

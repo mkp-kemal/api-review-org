@@ -24,7 +24,11 @@ export class OrganizationService {
         city: true,
         state: true,
         website: true,
-        claimedById: true,
+        claimedBy: {
+          select: {
+            email: true,
+          }
+        },
         approvedById: true,
         rejectedReason: true,
         updatedAt: true,
@@ -191,6 +195,10 @@ export class OrganizationService {
       throw new BadRequestException('Organization has related teams');
     }
 
+    await this.prisma.subscription.deleteMany({
+      where: { organizationId: id },
+    });
+
     return this.prisma.organization.delete({ where: { id } });
   }
 
@@ -275,6 +283,59 @@ export class OrganizationService {
       created: createdOrgs,
       skipped,
     };
+  }
+
+  async getOrganizationWithAccess(userId: string) {
+    return this.prisma.organization.findMany({
+      where: {
+        claimedById: userId
+      },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        state: true,
+        website: true,
+        rejectedReason: true,
+        teams: {
+          select: {
+            id: true,
+            name: true,
+            division: true,
+            ageLevel: true,
+            city: true,
+            state: true,
+            createdAt: true,
+            approvedById: true,
+            submittedById: true,
+            roles: true,
+            status: true,
+            updatedAt: true,
+            subscription: {
+              select: {
+                id: true,
+                status: true,
+                plan: true,
+                stripeSubId: true,
+                createdAt: true,
+              },
+            }
+          }
+        },
+        subscription: {
+          select: {
+            id: true,
+            status: true,
+            plan: true,
+            stripeSubId: true,
+            createdAt: true,
+          },
+        },
+        status: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
   }
 
 }

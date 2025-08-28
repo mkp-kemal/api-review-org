@@ -155,8 +155,18 @@ export class TeamService {
         return this.prisma.team.create({
             data: {
                 ...data,
-                status: 'PENDING',
-            }
+                subscription: {
+                    create: {
+                        plan: SubscriptionPlan.BASIC,
+                        status: SubscriptionStatus.ACTIVE,
+                        stripeCustomerId: 'default',
+                        stripeSubId: 'default',
+                    },
+                },
+            },
+            include: {
+                subscription: true,
+            },
         });
     }
 
@@ -195,6 +205,10 @@ export class TeamService {
         if (reviewCount > 0) {
             throw new BadRequestException('Team has related reviews, cannot delete');
         }
+
+        await this.prisma.subscription.deleteMany({
+            where: { teamId: id },
+        });
 
         return this.prisma.team.delete({ where: { id } });
     }
@@ -264,6 +278,95 @@ export class TeamService {
             created: createdTeams,
             skipped,
         };
+    }
+
+    async getTeamsWithAccess(userId: string, role: string) {
+        if (role === 'ORG_ADMIN') {
+            const orgs = await this.prisma.organization.findMany({
+                where: { claimedById: userId },
+                select: { id: true }
+            });
+
+            const orgIds = orgs.map(o => o.id);
+
+            return this.prisma.team.findMany({
+                where: {
+                    organizationId: { in: orgIds }
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    division: true,
+                    ageLevel: true,
+                    city: true,
+                    state: true,
+                    createdAt: true,
+                    approvedById: true,
+                    submittedById: true,
+                    roles: true,
+                    status: true,
+                    updatedAt: true,
+                    organization: {
+                        select: {
+                            id: true,
+                            name: true,
+                            city: true,
+                            state: true,
+                            website: true,
+                            createdAt: true
+                        }
+                    },
+                    subscription: {
+                        select: {
+                            id: true,
+                            status: true,
+                            plan: true,
+                            stripeSubId: true,
+                            createdAt: true,
+                        },
+                    }
+                }
+            });
+        }
+
+        if (role === 'TEAM_ADMIN') {
+            return this.prisma.team.findMany({
+                where: { claimedById: userId },
+                select: {
+                    id: true,
+                    name: true,
+                    division: true,
+                    ageLevel: true,
+                    city: true,
+                    state: true,
+                    createdAt: true,
+                    approvedById: true,
+                    submittedById: true,
+                    roles: true,
+                    status: true,
+                    updatedAt: true,
+                    organization: {
+                        select: {
+                            id: true,
+                            name: true,
+                            city: true,
+                            state: true,
+                            website: true,
+                            createdAt: true
+                        }
+                    },
+                    subscription: {
+                        select: {
+                            id: true,
+                            status: true,
+                            plan: true,
+                            stripeSubId: true,
+                            createdAt: true,
+                        },
+                    }
+                }
+            });
+        }
     }
 
 
