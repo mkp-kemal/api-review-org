@@ -281,4 +281,43 @@ export class ReviewService {
             },
         });
     }
+
+      async getReviewsWithAccess(userId: string, sort: 'recent' | 'rating' = 'recent') {
+          const orgs = await this.prisma.organization.findMany({
+              where: { claimedById: userId },
+              select: { id: true },
+          });
+
+          const orgIds = orgs.map(o => o.id);
+
+          const sortObj: any = {};
+
+          if (sort === 'recent') {
+              sortObj.createdAt = 'desc';
+          } else if (sort === 'rating') {
+              sortObj.rating = {
+                  overall: 'desc'
+              };
+          }
+
+          return this.prisma.review.findMany({
+              where: {
+                  team: {
+                      organizationId: {
+                          in: orgIds
+                      }
+                  }
+              },
+              include: {
+                  rating: true,
+                  orgResponse: true,
+                  team: {
+                      include: {
+                          organization: true
+                      }
+                  },
+              },
+              orderBy: sortObj,
+          });
+      }
 }

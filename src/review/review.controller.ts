@@ -116,4 +116,10 @@ export class ReviewController {
 
         return { years };
     }
+
+      @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+      @Get('reviews/access/claim')
+      async getOrganizationWithAccess(@Req() req, @Query('sort') sort: 'recent' | 'rating' = 'recent') {
+        return this.reviewService.getReviewsWithAccess(req.user.userId, sort);
+      }
 }
