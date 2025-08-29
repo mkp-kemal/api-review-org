@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as bodyParser from 'body-parser';
 import { StripeRawBodyMiddleware } from './auth/strategies/stripe-raw-body.middleware';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -11,12 +12,21 @@ async function bootstrap() {
     origin: [process.env.APP_URL_CORS],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    credentials: true,
   });
 
   // app.use(new StripeRawBodyMiddleware().use);
   // Add raw body for Stripe webhook
   app.use('/billing/webhook', bodyParser.raw({ type: 'application/json' }));
+
+  // ✅ Enable class-validator globally
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true, // hapus property yang tidak ada di DTO
+      forbidNonWhitelisted: true, // kalau ada property asing, langsung error
+      transform: true, // auto transform payload ke instance DTO
+    }),
+  );
 
   const config = new DocumentBuilder()
     .setTitle('Review API')

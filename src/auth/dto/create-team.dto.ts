@@ -1,4 +1,4 @@
-import { IsString } from 'class-validator';
+import { IsOptional, IsString, IsEmail, ValidateIf } from 'class-validator';
 
 export class TeamDto {
   @IsString()
@@ -14,7 +14,12 @@ export class TeamDto {
   state: string;
 
   @IsString()
-  city: string;          // wajib
+  city: string;
+
   @IsString()
-  organizationId: string; // wajib
+  organizationId: string;
+
+  @ValidateIf((o) => o.email !== '' && o.email !== null && o.email !== undefined)
+  @IsEmail({}, { message: 'Invalid email format' })
+  email?: string;
 }

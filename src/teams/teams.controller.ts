@@ -14,6 +14,7 @@ import * as csvParser from 'csv-parser';
 import { File as MulterFile } from 'multer';
 import * as streamifier from 'streamifier';
 import { ApiTags, ApiResponse, ApiConsumes, ApiBody } from "@nestjs/swagger";
+import { UpdateTeamDto } from "src/auth/dto/update-team.dto";
 
 @ApiTags('Teams')
 @Controller('teams')
@@ -37,19 +38,19 @@ export class TeamController {
 
   @AuditLog('CREATE', 'TEAM')
   @Post()
-  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN]))
   @ApiResponse({ status: 201, description: 'Team created successfully' })
   @ApiBody({ type: TeamDto })
-  createTeam(@Body() teamDto: TeamDto) {
-    return this.teamService.create(teamDto);
+  createTeam(@Body() teamDto: TeamDto, @Req() req) {
+    return this.teamService.create(teamDto, req.user.userId);
   }
 
   @AuditLog('UPDATE', 'TEAM')
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
   @ApiResponse({ status: 200, description: 'Team updated successfully' })
-  @ApiBody({ type: TeamDto })
-  updateTeam(@Param('id') id: string, @Body() teamDto: TeamDto, @Req() req) {
+  @ApiBody({ type: UpdateTeamDto })
+  updateTeam(@Param('id') id: string, @Body() teamDto: UpdateTeamDto, @Req() req) {
     return this.teamService.update(id, teamDto, req.user.userId);
   }
 
@@ -62,9 +63,6 @@ export class TeamController {
     return this.teamService.delete(id);
   }
 
-  @Post('upload-csv')
-  @UseInterceptors(FileInterceptor('file'))
-  @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
@@ -75,6 +73,11 @@ export class TeamController {
     },
   })
   @ApiResponse({ status: 201, description: 'CSV uploaded and processed successfully' })
+  @AuditLog('CREATE', 'TEAM_CSV')
+  @Post('upload-csv')
+  @UseInterceptors(FileInterceptor('file'))
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN]))
+  @ApiConsumes('multipart/form-data')
   async uploadCsv(
     @UploadedFile() file: MulterFile,
     @Body('organizationId') organizationId: string,
@@ -105,5 +108,11 @@ export class TeamController {
   @Get('access/claim')
   async getTeamsWithAccess(@Req() req) {
     return this.teamService.getTeamsWithAccess(req.user.userId, req.user.role);
+  }
+
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
+  @Patch('claim/:teamId')
+  async claimTeamByEmail(@Body('email') email: string, @Param('teamId') teamId: string, @Req() req) {
+    return this.teamService.claimTeamByEmail(req.user.userId, email, teamId);
   }
 }

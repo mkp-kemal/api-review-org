@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
+import { OrgStatus, Role, SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
 
@@ -7,8 +7,8 @@ import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
 export class OrganizationService {
   constructor(private prisma: PrismaService) { }
 
-  async findAll(query: { name?: string; state?: string; city?: string }) {
-    const { name, state, city } = query;
+  async findAll(query: { name?: string; state?: string; city?: string, isFilterByStatus?: OrgStatus }) {
+    const { name, state, city, isFilterByStatus } = query;
 
     return this.prisma.organization.findMany({
       where: {
@@ -16,6 +16,7 @@ export class OrganizationService {
           name ? { name: { contains: name, mode: 'insensitive' } } : {},
           state ? { state: { equals: state, mode: 'insensitive' } } : {},
           city ? { city: { equals: city, mode: 'insensitive' } } : {},
+          isFilterByStatus ? { status: { equals: isFilterByStatus } } : {},
         ],
       },
       select: {
@@ -181,10 +182,19 @@ export class OrganizationService {
       throw new BadRequestException('Email domain does not match organization domain');
     }
 
-    return this.prisma.organization.update({
+    await this.prisma.organization.update({
       where: { id: orgId },
       data: { claimedById: userId },
     });
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { role: Role.ORG_ADMIN },
+    });
+
+    return {
+      message: 'Organization claimed successfully',
+    };
   }
 
   async delete(id: string) {
@@ -337,5 +347,4 @@ export class OrganizationService {
       }
     });
   }
-
 }

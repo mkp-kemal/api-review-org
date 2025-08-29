@@ -3,7 +3,7 @@ import { OrganizationService } from './organization.service';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 import { RoleGuard } from 'src/auth/strategies/role-guard';
 import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
-import { Role } from '@prisma/client';
+import { OrgStatus, Role } from '@prisma/client';
 import { AuditLog } from 'src/audit/audit-log.decorator';
 import { OptionalJwtAuthGuard } from 'src/auth/strategies/jwt-optional-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -11,6 +11,7 @@ import * as csvParser from 'csv-parser';
 import { File as MulterFile } from 'multer';
 import * as streamifier from 'streamifier';
 import { ApiBody, ApiOkResponse, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { UpdateOrganizationDto } from 'src/auth/dto/update-organization.dto';
 
 @ApiTags('Organization')
 @Controller('orgs')
@@ -62,8 +63,9 @@ export class OrganizationController {
     @Query('name') name?: string,
     @Query('state') state?: string,
     @Query('city') city?: string,
+    @Query('isFilterByStatus') isFilterByStatus?: OrgStatus
   ) {
-    return this.orgService.findAll({ name, state, city });
+    return this.orgService.findAll({ name, state, city, isFilterByStatus });
   }
 
   @ApiOkResponse({
@@ -163,11 +165,11 @@ export class OrganizationController {
   }
 
   @ApiResponse({ status: 201, description: 'Organization updated successfully' })
-  @ApiBody({ type: OrganizationDto })
+  @ApiBody({ type: UpdateOrganizationDto })
   @AuditLog('UPDATE', 'ORGANIZATION')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Patch(':id')
-  async updateOrg(@Param('id') id: string, @Body() data: OrganizationDto, @Req() req) {
+  async updateOrg(@Param('id') id: string, @Body() data: UpdateOrganizationDto, @Req() req) {
     return this.orgService.update(id, data, req.user.userId);
   }
 
