@@ -15,13 +15,23 @@ export class FlagsController {
 
     @UseGuards(OptionalJwtAuthGuard)
     @Post('reviews/:id/flag')
-    async flagReview(@Param('id') reviewId: string, @Body() dto: CreateFlagDto & { userId?: string }, @Request() req) {
+    async flagReview(
+        @Param('id') reviewId: string,
+        @Body() dto: CreateFlagDto & { userId?: string },
+        @Request() req
+    ) {
         const userId = req.user?.userId ?? dto.userId;
 
         if (!userId) throw new BadRequestException('userId is required');
 
-        return this.flagsService.flagReview(reviewId, userId, dto);
+        // ambil IP (pakai x-forwarded-for kalau ada proxy, fallback ke remoteAddress)
+        const ip =
+            (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
+            req.socket.remoteAddress;
+
+        return this.flagsService.flagReview(reviewId, userId, dto, ip);
     }
+
 
     @AuditLog('READ', 'FLAG')
     @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))

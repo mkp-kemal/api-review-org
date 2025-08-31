@@ -3,6 +3,7 @@ import { SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
 import Stripe from 'stripe';
 import { PrismaService } from 'prisma/prisma.service';
 import { StripeService } from 'src/stripe/stripe.service';
+import { ErrorCode } from 'src/common/error-code';
 
 @Injectable()
 export class BillingService {
@@ -21,10 +22,10 @@ export class BillingService {
       where: { id: organizationId },
       include: { subscription: true },
     });
-    if (!organization) throw new NotFoundException('Organization not found');
+    if (!organization) throw new NotFoundException(ErrorCode.ORGANIZATION_NOT_FOUND);
 
     if (organization.subscription) {
-      throw new BadRequestException('Organization already has an active subscription');
+      throw new BadRequestException(ErrorCode.ORGANIZATION_ALREADY_HAS_ACTIVE_SUBSCRIPTION);
     }
 
     let customerId: string;
@@ -60,7 +61,7 @@ export class BillingService {
         plan,
         status: SubscriptionStatus.ACTIVE,
         stripeCustomerId: customerId,
-        stripeSubId: "twertyu", // nanti diisi real stripe subId
+        stripeSubId: "-", // from stripe
       },
     });
 
@@ -80,7 +81,7 @@ export class BillingService {
   }
 
   private async handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-    // Pastikan ini mode subscription
+    // must be mode subscription
     if (session.mode !== 'subscription') return;
 
     const organizationId = session.metadata?.organizationId;
@@ -93,7 +94,6 @@ export class BillingService {
       return;
     }
 
-    // Simpan subscription di DB
     await this.prisma.subscription.create({
       data: {
         organizationId,
@@ -171,7 +171,7 @@ export class BillingService {
       include: { subscription: true },
     });
 
-    if (!organization) throw new NotFoundException('Organization not found');
+    if (!organization) throw new NotFoundException(ErrorCode.ORGANIZATION_NOT_FOUND);
 
     return {
       organizationId,
@@ -193,3 +193,8 @@ export class BillingService {
     }
   }
 }
+
+
+
+
+

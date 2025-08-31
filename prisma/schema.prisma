@@ -164,11 +164,13 @@ model Flag {
   reporterUserId String
   reason         String
   status         FlagStatus @default(OPEN)
+  ip             String
   createdAt      DateTime   @default(now())
   reporter       User       @relation("FlagReporter", fields: [reporterUserId], references: [id])
   review         Review     @relation(fields: [reviewId], references: [id])
 
   @@unique([reviewId, reporterUserId]) // 🚨 prevent duplicate flag
+  @@unique([reviewId, ip])
 }
 
 model OrgResponse {
