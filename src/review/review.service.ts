@@ -3,6 +3,7 @@ import { PrismaService } from 'prisma/prisma.service';
 import { CreateResponseReviewDto } from 'src/auth/dto/create-response-review.dto';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
 import { UpdateReviewDto } from 'src/auth/dto/update-review.dto';
+import { ErrorCode } from 'src/common/error-code';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -15,7 +16,7 @@ export class ReviewService {
         dto: CreateReviewDto,
     ) {
         let user = await this.prisma.user.findUnique({ where: { id: userId } });
-        
+
         if (!user) {
             user = await this.prisma.user.create({
                 data: {
@@ -193,7 +194,7 @@ export class ReviewService {
                 : { createdAt: 'desc' as const };
 
         const where: any = {};
-        
+
         if (isByPublic) {
             where.isPublic = true;
         }
@@ -221,7 +222,7 @@ export class ReviewService {
                     select: { email: true },
                 },
                 flags: {
-                    select:{
+                    select: {
                         id: true,
                         reporter: {
                             select: {
@@ -247,32 +248,55 @@ export class ReviewService {
     }
 
 
-    async respondToReview(reviewId: string, orgUserId: string, dto: CreateResponseReviewDto) {
-        // cek review
+    async respondToReview(
+        reviewId: string,
+        orgUserId: string,
+        dto: CreateResponseReviewDto
+    ) {
+        // 1. get review
         const review = await this.prisma.review.findUnique({
             where: { id: reviewId },
+            include: { team: { include: { subscription: true } } }
         });
 
         if (!review) {
-            throw new NotFoundException('Review not found');
+            throw new NotFoundException(ErrorCode.REVIEW_NOT_FOUND);
         }
 
-        // cek apakah review sudah ada response
+        // 2. get organization + subscription
+        const organization = await this.prisma.organization.findUnique({
+            where: { id: review.team.organizationId },
+            include: { subscription: true }
+        });
+
+        if (!organization) {
+            throw new NotFoundException(ErrorCode.ORGANIZATION_NOT_FOUND);
+        }
+
+        // 3. determine effective plan
+        const teamPlan = review.team.subscription?.plan;
+        const orgPlan = organization.subscription?.plan;
+        const effectivePlan = teamPlan || orgPlan;
+
+        // 4. check if plan allows responding
+        if (!['PRO', 'ELITE'].includes(effectivePlan)) {
+            throw new ForbiddenException(ErrorCode.PLAN_NOT_SUPPORTED);
+        }
+
+        // 5. check if response already exists
         const existingResponse = await this.prisma.orgResponse.findUnique({
             where: { reviewId },
         });
 
         if (existingResponse) {
-            // update jika sudah ada
+            // update response
             return this.prisma.orgResponse.update({
                 where: { reviewId },
-                data: {
-                    body: dto.body,
-                },
+                data: { body: dto.body },
             });
         }
 
-        // create response baru
+        // 6. create response
         return this.prisma.orgResponse.create({
             data: {
                 reviewId,
@@ -282,42 +306,43 @@ export class ReviewService {
         });
     }
 
-      async getReviewsWithAccess(userId: string, sort: 'recent' | 'rating' = 'recent') {
-          const orgs = await this.prisma.organization.findMany({
-              where: { claimedById: userId },
-              select: { id: true },
-          });
 
-          const orgIds = orgs.map(o => o.id);
+    async getReviewsWithAccess(userId: string, sort: 'recent' | 'rating' = 'recent') {
+        const orgs = await this.prisma.organization.findMany({
+            where: { claimedById: userId },
+            select: { id: true },
+        });
 
-          const sortObj: any = {};
+        const orgIds = orgs.map(o => o.id);
 
-          if (sort === 'recent') {
-              sortObj.createdAt = 'desc';
-          } else if (sort === 'rating') {
-              sortObj.rating = {
-                  overall: 'desc'
-              };
-          }
+        const sortObj: any = {};
 
-          return this.prisma.review.findMany({
-              where: {
-                  team: {
-                      organizationId: {
-                          in: orgIds
-                      }
-                  }
-              },
-              include: {
-                  rating: true,
-                  orgResponse: true,
-                  team: {
-                      include: {
-                          organization: true
-                      }
-                  },
-              },
-              orderBy: sortObj,
-          });
-      }
+        if (sort === 'recent') {
+            sortObj.createdAt = 'desc';
+        } else if (sort === 'rating') {
+            sortObj.rating = {
+                overall: 'desc'
+            };
+        }
+
+        return this.prisma.review.findMany({
+            where: {
+                team: {
+                    organizationId: {
+                        in: orgIds
+                    }
+                }
+            },
+            include: {
+                rating: true,
+                orgResponse: true,
+                team: {
+                    include: {
+                        organization: true
+                    }
+                },
+            },
+            orderBy: sortObj,
+        });
+    }
 }
