@@ -1,10 +1,12 @@
-import { Controller, Post, Get, Req, Res, Body, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Req, Res, Body, Param, BadRequestException, UseGuards } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { Request, Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SubscriptionPlan } from '@prisma/client';
 import Stripe from 'stripe';
 import { StripeService } from 'src/stripe/stripe.service';
+import { PrismaService } from 'prisma/prisma.service';
+import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 
 interface StripeRequest extends Request {
   rawBody?: Buffer;
@@ -13,7 +15,7 @@ interface StripeRequest extends Request {
 @ApiTags('Billing')
 @Controller('billing')
 export class BillingController {
-  constructor(private readonly billingService: BillingService, private readonly stripeService: StripeService) { }
+  constructor(private readonly billingService: BillingService, private readonly stripeService: StripeService, private readonly prisma: PrismaService) { }
 
   // @Post('subscribe')
   // @ApiOperation({ summary: 'Create a new subscription (with checkout)' })
@@ -51,10 +53,18 @@ export class BillingController {
     }
   }
 
-
   @ApiOperation({ summary: 'Create a new subscription (with checkout)' })
+  @UseGuards(JwtAuthGuard)
   @Post('checkout-session')
-  async createCheckoutSession(@Body() body: { plan: string; organizationId: string }) {
+  async createCheckoutSession(
+    @Body()
+    body: {
+      plan: string;
+      teamId?: string;
+      organizationId?: string;
+    },
+  ) {
+    // ✅ Validasi plan → mapping ke Stripe price ID
     let priceId: string | undefined;
 
     if (body.plan === SubscriptionPlan.PRO) {
@@ -64,9 +74,36 @@ export class BillingController {
     }
 
     if (!priceId) {
-      throw new BadRequestException('Stripe price ID is not set');
+      throw new BadRequestException('Invalid plan or Stripe price ID not set');
     }
 
+    // ✅ Validasi target entity
+    let targetType: 'team' | 'organization' | null = null;
+    let targetId: string | null = null;
+
+    if (body.teamId) {
+      const team = await this.prisma.team.findUnique({
+        where: { id: body.teamId },
+      });
+      if (!team) {
+        throw new BadRequestException('Team not found');
+      }
+      targetType = 'team';
+      targetId = team.id;
+    } else if (body.organizationId) {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: body.organizationId },
+      });
+      if (!org) {
+        throw new BadRequestException('Organization not found');
+      }
+      targetType = 'organization';
+      targetId = org.id;
+    } else {
+      throw new BadRequestException('Either teamId or organizationId is required');
+    }
+
+    // ✅ Buat Stripe checkout session
     const session = await this.stripeService.stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -77,11 +114,11 @@ export class BillingController {
         },
       ],
       metadata: {
-        organizationId: body.organizationId,
         plan: body.plan,
+        [targetType + 'Id']: targetId, // dinamis → "teamId" atau "organizationId"
       },
       success_url: `${process.env.APP_URL}/Blog.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: 'http://localhost:3000/cancel',
+      cancel_url: `${process.env.APP_URL}/billing/cancel`,
     });
 
     return { url: session.url };
