@@ -594,25 +594,32 @@ export class TeamService {
         if (!isUnder1MB) {
             throw new BadRequestException('Each file must be under 1MB!');
         }
-        
+
         // simpan ke disk baru setelah valid
         const savedPhotos = await Promise.all(
             files.map(async (file) => {
                 const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
                 const ext = extname(file.originalname);
                 const filename = `team-${uniqueSuffix}${ext}`;
-                const filePath = join(__dirname, '../../public/team-photos', filename);
+
+                // arahkan ke root project, bukan dist
+                const uploadDir = join(process.cwd(), 'public', 'team-photos');
+                const filePath = join(uploadDir, filename);
+
+                // pastikan folder ada
+                await fs.mkdir(uploadDir, { recursive: true });
 
                 await fs.writeFile(filePath, file.buffer);
 
                 return this.prisma.teamPhoto.create({
                     data: {
                         teamId,
-                        filename: `/team-photos/${filename}`,
+                        filename: `/team-photos/${filename}`, // ini bisa jadi URL statis
                     },
                 });
             }),
         );
+
 
         return savedPhotos.map(p => p.filename);
     }
