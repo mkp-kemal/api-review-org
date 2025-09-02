@@ -106,6 +106,7 @@ model Team {
   approvedBy   User?          @relation("TeamApprovedBy", fields: [approvedById], references: [id])
   reviews      Review[]
   roles        UserTeamRole[]
+  teamPhoto    TeamPhoto[]
 
   // Relasi ke Subscription
   subscription Subscription?
@@ -204,6 +205,17 @@ model RefreshToken {
   expiresAt DateTime
   revoked   Boolean  @default(false)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TeamPhoto {
+  id        String   @id @default(cuid())
+  teamId    String
+  filename  String // nama file / path relatif
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@index([teamId])
 }
 
 enum Role {

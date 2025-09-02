@@ -2,6 +2,9 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { Role, SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
 import { PrismaService } from "prisma/prisma.service";
 import { TeamDto } from "src/auth/dto/create-team.dto";
+import { File as MulterFile } from 'multer';
+import { extname, join } from "path";
+import * as fs from 'node:fs/promises';
 
 @Injectable()
 export class TeamService {
@@ -566,6 +569,67 @@ export class TeamService {
         return { message: 'Team successfully claimed', updateTeam };
     }
 
+    async uploadTeamPhotos(teamId: string, files: MulterFile[]) {
+        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+        if (!team) {
+            throw new BadRequestException('Team not found');
+        }
 
+        if (files.length > 5) {
+            throw new BadRequestException('You can only upload 5 photos');
+        }
+
+        // cek apakah file valid
+        const isValid = files.every((file) => {
+            return file.mimetype.startsWith('image/');
+        });
+        if (!isValid) {
+            throw new BadRequestException('Only image files are allowed!');
+        }
+
+        // cek ukuran file
+        const isUnder1MB = files.every((file) => {
+            return file.size < 1e6;
+        });
+        if (!isUnder1MB) {
+            throw new BadRequestException('Each file must be under 1MB!');
+        }
+        
+        // simpan ke disk baru setelah valid
+        const savedPhotos = await Promise.all(
+            files.map(async (file) => {
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+                const ext = extname(file.originalname);
+                const filename = `team-${uniqueSuffix}${ext}`;
+                const filePath = join(__dirname, '../../public/team-photos', filename);
+
+                await fs.writeFile(filePath, file.buffer);
+
+                return this.prisma.teamPhoto.create({
+                    data: {
+                        teamId,
+                        filename: `/team-photos/${filename}`,
+                    },
+                });
+            }),
+        );
+
+        return savedPhotos.map(p => p.filename);
+    }
+
+
+    async getTeamPhotos(teamId: string) {
+        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+        if (!team) {
+            throw new BadRequestException('Team not found');
+        }
+
+        const photos = await this.prisma.teamPhoto.findMany({
+            where: { teamId },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        return photos.map(p => p.filename);
+    }
 
 }

@@ -1,12 +1,13 @@
-import { Controller, Post, Get, Req, Res, Body, Param, BadRequestException, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Req, Res, Body, Param, BadRequestException, UseGuards, ForbiddenException } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { Request, Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { SubscriptionPlan } from '@prisma/client';
+import { Role, SubscriptionPlan } from '@prisma/client';
 import Stripe from 'stripe';
 import { StripeService } from 'src/stripe/stripe.service';
 import { PrismaService } from 'prisma/prisma.service';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
+import { ErrorCode } from 'src/common/error-code';
 
 interface StripeRequest extends Request {
   rawBody?: Buffer;
@@ -63,7 +64,15 @@ export class BillingController {
       teamId?: string;
       organizationId?: string;
     },
+    @Req() req: Request
   ) {
+
+    const user = (req.user as any);
+
+    if (!user) {
+      throw new ForbiddenException(ErrorCode.USER_NOT_AUTHORIZED);
+    }
+
     // ✅ Validasi plan → mapping ke Stripe price ID
     let priceId: string | undefined;
 
@@ -74,7 +83,7 @@ export class BillingController {
     }
 
     if (!priceId) {
-      throw new BadRequestException('Invalid plan or Stripe price ID not set');
+      throw new BadRequestException(ErrorCode.INVALID_PLAN_OR_STRIPE_PRICE);
     }
 
     // ✅ Validasi target entity
@@ -86,7 +95,7 @@ export class BillingController {
         where: { id: body.teamId },
       });
       if (!team) {
-        throw new BadRequestException('Team not found');
+        throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
       }
       targetType = 'team';
       targetId = team.id;
@@ -95,13 +104,20 @@ export class BillingController {
         where: { id: body.organizationId },
       });
       if (!org) {
-        throw new BadRequestException('Organization not found');
+        throw new BadRequestException(ErrorCode.ORGANIZATION_NOT_FOUND);
       }
       targetType = 'organization';
       targetId = org.id;
     } else {
-      throw new BadRequestException('Either teamId or organizationId is required');
+      throw new BadRequestException(ErrorCode.SOMETHING_WENT_WRONG);
     }
+
+    if (targetType === "organization") {
+      if (user.role !== Role.ORG_ADMIN) {
+        throw new ForbiddenException(ErrorCode.ACCESS_FORBIDDEN);
+      }
+    }
+
 
     // ✅ Buat Stripe checkout session
     const session = await this.stripeService.stripe.checkout.sessions.create({
@@ -115,7 +131,7 @@ export class BillingController {
       ],
       metadata: {
         plan: body.plan,
-        [targetType + 'Id']: targetId, // dinamis → "teamId" atau "organizationId"
+        [targetType + 'Id']: targetId,
       },
       success_url: `${process.env.APP_URL}/Blog.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.APP_URL}/billing/cancel`,
