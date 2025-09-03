@@ -5,10 +5,23 @@ import { TeamDto } from "src/auth/dto/create-team.dto";
 import { File as MulterFile } from 'multer';
 import { extname, join } from "path";
 import * as fs from 'node:fs/promises';
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { ErrorCode } from "src/common/error-code";
 
 @Injectable()
 export class TeamService {
-    constructor(private prisma: PrismaService) { }
+    private s3: S3Client
+    private bucketName = process.env.AWS_S3_BUCKET;
+
+    constructor(private prisma: PrismaService) {
+        this.s3 = new S3Client({
+            region: process.env.AWS_REGION,
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+            }
+        })
+    }
 
     async findAll() {
         return this.prisma.team.findMany({
@@ -515,7 +528,7 @@ export class TeamService {
             );
         }
 
-        // ✅ Cari team dulu
+        // check if team exists
         const team = await this.prisma.team.findUnique({
             where: { id: teamId },
         });
@@ -524,7 +537,7 @@ export class TeamService {
             throw new NotFoundException(`Team with id ${teamId} not found`);
         }
 
-        // ✅ Cek apakah sudah pernah di-claim
+        // check if team is already claimed
         if (team.claimedById) {
             throw new ForbiddenException(
                 `Team is already claimed by another user`,
@@ -541,7 +554,7 @@ export class TeamService {
             },
         });
 
-        // Jika user masih reviewer → upgrade ke TEAM_ADMIN
+        // if user role is REVIEWER, change role to TEAM_ADMIN
         if (user.role === Role.REVIEWER) {
             await this.prisma.user.update({
                 where: { id: user.id },
@@ -572,41 +585,38 @@ export class TeamService {
     async uploadTeamPhotos(teamId: string, files: MulterFile[]) {
         const team = await this.prisma.team.findUnique({ where: { id: teamId } });
         if (!team) {
-            throw new BadRequestException('Team not found');
+            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
         }
 
         if (files.length > 5) {
-            throw new BadRequestException('You can only upload 5 photos');
+            throw new BadRequestException(ErrorCode.TOO_MANY_PHOTOS_UPLOADED_MAX_5);
         }
 
-        // cek apakah file valid
         const isValid = files.every((file) => {
             return file.mimetype.startsWith('image/');
         });
         if (!isValid) {
-            throw new BadRequestException('Only image files are allowed!');
+            throw new BadRequestException(ErrorCode.ONLY_IMAGE_FILES_ALLOWED);
         }
 
-        // cek ukuran file
         const isUnder1MB = files.every((file) => {
             return file.size < 1e6;
         });
         if (!isUnder1MB) {
-            throw new BadRequestException('Each file must be under 1MB!');
+            throw new BadRequestException(ErrorCode.EACH_FILE_SIZE_SHOULD_BE_UNDER_2MB);
         }
 
-        // simpan ke disk baru setelah valid
         const savedPhotos = await Promise.all(
             files.map(async (file) => {
                 const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
                 const ext = extname(file.originalname);
                 const filename = `team-${uniqueSuffix}${ext}`;
 
-                // arahkan ke root project, bukan dist
+                // make to root folder
                 const uploadDir = join(process.cwd(), 'public', 'team-photos');
                 const filePath = join(uploadDir, filename);
 
-                // pastikan folder ada
+                // make folder
                 await fs.mkdir(uploadDir, { recursive: true });
 
                 await fs.writeFile(filePath, file.buffer);
@@ -614,7 +624,7 @@ export class TeamService {
                 return this.prisma.teamPhoto.create({
                     data: {
                         teamId,
-                        filename: `/team-photos/${filename}`, // ini bisa jadi URL statis
+                        filename: `/team-photos/${filename}`, // you can change with domain
                     },
                 });
             }),
@@ -628,7 +638,7 @@ export class TeamService {
     async getTeamPhotos(teamId: string) {
         const team = await this.prisma.team.findUnique({ where: { id: teamId } });
         if (!team) {
-            throw new BadRequestException('Team not found');
+            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
         }
 
         const photos = await this.prisma.teamPhoto.findMany({
@@ -639,4 +649,57 @@ export class TeamService {
         return photos.map(p => p.filename);
     }
 
+    async uploadTeamPhotosAws(teamId: string, files: MulterFile[]) {
+        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+        if (!team) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
+        }
+
+        if (files.length > 5) {
+            throw new BadRequestException(ErrorCode.TOO_MANY_PHOTOS_UPLOADED_MAX_5);
+        }
+
+        const isValid = files.every((file) => {
+            return file.mimetype.startsWith('image/');
+        });
+        if (!isValid) {
+            throw new BadRequestException(ErrorCode.ONLY_IMAGE_FILES_ALLOWED);
+        }
+
+        const isUnder1MB = files.every((file) => {
+            return file.size < 2e6; // 2MB
+        });
+        
+        if (!isUnder1MB) {
+            throw new BadRequestException(ErrorCode.EACH_FILE_SIZE_SHOULD_BE_UNDER_2MB);
+        }
+
+        const savedPhotos = await Promise.all(
+            files.map(async (file) => {
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+                const ext = extname(file.originalname);
+                const fileKey = `team-${uniqueSuffix}${ext}`;
+
+                const command = new PutObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: fileKey,
+                    Body: file.buffer,
+                    ContentType: file.mimetype,
+                });
+
+                await this.s3.send(command);
+
+                const fileUrl = `https://${this.bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
+
+                return this.prisma.teamPhoto.create({
+                    data: {
+                        teamId,
+                        filename: fileUrl,
+                    },
+                });
+            }),
+        );
+
+        return savedPhotos.map(p => p.filename);
+    }
 }

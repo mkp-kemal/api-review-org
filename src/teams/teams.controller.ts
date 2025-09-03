@@ -19,13 +19,16 @@ import { UpdateTeamDto } from "src/auth/dto/update-team.dto";
 import { extname } from "path";
 import { UploadFileDto } from "src/auth/dto/upload-file.dto";
 import { MulterExceptionFilter } from "src/common/multer-exception.filter";
+import { S3Client } from "@aws-sdk/client-s3";
 
 
 @ApiTags('Teams')
 @Controller('teams')
-  @UseFilters(MulterExceptionFilter)
+@UseFilters(MulterExceptionFilter)
 export class TeamController {
-  constructor(private teamService: TeamService) { }
+  constructor(
+    private teamService: TeamService,
+  ) {}
 
   // @AuditLog('READ', 'TEAMS')
   @Get()
@@ -137,6 +140,27 @@ export class TeamController {
   )
   async upload(@UploadedFiles() files: MulterFile[], @Body() dto: UploadFileDto) {
     const photoPaths = await this.teamService.uploadTeamPhotos(dto.teamId, files);
+    return {
+      message: 'Files uploaded successfully',
+      photos: photoPaths,
+    };
+  }
+
+  @Post('upload-photos-aws')
+  @UseInterceptors(
+    FilesInterceptor('files', 5, {
+      storage: multer.memoryStorage(),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          return cb(new BadRequestException('Only image files are allowed!'), false);
+        }
+        cb(null, true);
+      },
+      // limits: { fileSize: 1 * 1024 * 1024 },
+    }),
+  )
+  async uploadAws(@UploadedFiles() files: MulterFile[], @Body() dto: UploadFileDto) {
+    const photoPaths = await this.teamService.uploadTeamPhotosAws(dto.teamId, files);
     return {
       message: 'Files uploaded successfully',
       photos: photoPaths,
