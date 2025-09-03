@@ -1,11 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
-import { Role, SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
+import { OrgStatus, Role, SubscriptionPlan, SubscriptionStatus, TypeSystemUpload } from "@prisma/client";
 import { PrismaService } from "prisma/prisma.service";
 import { TeamDto } from "src/auth/dto/create-team.dto";
 import { File as MulterFile } from 'multer';
 import { extname, join } from "path";
 import * as fs from 'node:fs/promises';
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { ErrorCode } from "src/common/error-code";
 
 @Injectable()
@@ -78,6 +78,11 @@ export class TeamService {
                 state: true,
                 status: true,
                 claimedById: true,
+                teamPhoto: {
+                    select: {
+                        filename: true
+                    }
+                },
                 organization: {
                     select: {
                         id: true,
@@ -289,7 +294,7 @@ export class TeamService {
             data.rejectedReason = updatedRejectReason.rejectedReason;
         }
 
-        if (data.status === 'APPROVED') {
+        if (data.status === OrgStatus.APPROVED) {
             data.approvedById = userId;
         }
 
@@ -588,6 +593,10 @@ export class TeamService {
             throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
         }
 
+        if(team.status != OrgStatus.APPROVED) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
+        }
+
         if (files.length > 5) {
             throw new BadRequestException(ErrorCode.TOO_MANY_PHOTOS_UPLOADED_MAX_5);
         }
@@ -634,25 +643,14 @@ export class TeamService {
         return savedPhotos.map(p => p.filename);
     }
 
-
-    async getTeamPhotos(teamId: string) {
+    async uploadTeamPhotosAws(teamId: string, files: MulterFile[]) {
         const team = await this.prisma.team.findUnique({ where: { id: teamId } });
         if (!team) {
             throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
         }
 
-        const photos = await this.prisma.teamPhoto.findMany({
-            where: { teamId },
-            orderBy: { createdAt: 'desc' },
-        });
-
-        return photos.map(p => p.filename);
-    }
-
-    async uploadTeamPhotosAws(teamId: string, files: MulterFile[]) {
-        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
-        if (!team) {
-            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
+        if(team.status != OrgStatus.APPROVED) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
         }
 
         if (files.length > 5) {
@@ -669,7 +667,7 @@ export class TeamService {
         const isUnder1MB = files.every((file) => {
             return file.size < 2e6; // 2MB
         });
-        
+
         if (!isUnder1MB) {
             throw new BadRequestException(ErrorCode.EACH_FILE_SIZE_SHOULD_BE_UNDER_2MB);
         }
@@ -701,5 +699,66 @@ export class TeamService {
         );
 
         return savedPhotos.map(p => p.filename);
+    }
+
+    async uploadTeamPhotosAwsOrLocal(teamId: string, files: MulterFile[], typeSystem: TypeSystemUpload) {
+        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+        if (!team) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
+        }
+
+        if(team.status != OrgStatus.APPROVED) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
+        }
+
+        if (files.length > 5) {
+            throw new BadRequestException(ErrorCode.TOO_MANY_PHOTOS_UPLOADED_MAX_5);
+        }
+
+        const isValid = files.every((file) => {
+            return file.mimetype.startsWith('image/');
+        });
+        if (!isValid) {
+            throw new BadRequestException(ErrorCode.ONLY_IMAGE_FILES_ALLOWED);
+        }
+
+        const isUnder1MB = files.every((file) => {
+            return file.size < 2e6; // 2MB
+        });
+
+        if (!isUnder1MB) {
+            throw new BadRequestException(ErrorCode.EACH_FILE_SIZE_SHOULD_BE_UNDER_2MB);
+        }
+
+        if (typeSystem === TypeSystemUpload.LOCALFOLDER) {
+            return this.uploadTeamPhotos(teamId, files);
+        } else if (typeSystem === TypeSystemUpload.AWSS3) {
+            return this.uploadTeamPhotosAws(teamId, files);
+        }
+    }
+
+    async deleteTeamPhotos(teamId: string) {
+        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+        if (!team) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
+        }
+
+        if(team.status != OrgStatus.APPROVED) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
+        }
+
+        // const teamPhotos = await this.prisma.teamPhoto.findMany({ where: { teamId } });
+        // for (const teamPhoto of teamPhotos) {
+        //     if (teamPhoto.filename.startsWith('https://')) {
+        //         const fileKey = teamPhoto.filename.split('/').pop();
+        //         const command = new DeleteObjectCommand({
+        //             Bucket: this.bucketName,
+        //             Key: fileKey,
+        //         });
+        //         await this.s3.send(command);
+        //     }
+        // }
+
+        return this.prisma.teamPhoto.deleteMany({ where: { teamId } });
     }
 }
