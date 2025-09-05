@@ -183,8 +183,6 @@ export class TeamService {
         return team;
     }
 
-
-
     async create(data: TeamDto, userId: string) {
         try {
             let user = null;
