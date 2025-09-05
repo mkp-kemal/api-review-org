@@ -735,32 +735,4 @@ export class TeamService {
         }
     }
 
-<<<<<<< HEAD
 }
-=======
-    async deleteTeamPhotos(teamId: string) {
-        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
-        if (!team) {
-            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
-        }
-
-        if(team.status != OrgStatus.APPROVED) {
-            throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
-        }
-
-        // const teamPhotos = await this.prisma.teamPhoto.findMany({ where: { teamId } });
-        // for (const teamPhoto of teamPhotos) {
-        //     if (teamPhoto.filename.startsWith('https://')) {
-        //         const fileKey = teamPhoto.filename.split('/').pop();
-        //         const command = new DeleteObjectCommand({
-        //             Bucket: this.bucketName,
-        //             Key: fileKey,
-        //         });
-        //         await this.s3.send(command);
-        //     }
-        // }
-
-        return this.prisma.teamPhoto.deleteMany({ where: { teamId } });
-    }
-}
->>>>>>> fc5509096113e1d9cc395db04e1332d45b0d829d
