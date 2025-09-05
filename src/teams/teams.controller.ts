@@ -1,12 +1,13 @@
 import {
   BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post,
+  Query,
   Req,
   UploadedFile, UploadedFiles, UseFilters, UseGuards, UseInterceptors
 } from "@nestjs/common";
 import { TeamService } from "./team.service";
 import { JwtAuthGuard } from "src/auth/strategies/jwt-auth.guard";
 import { RoleGuard } from "src/auth/strategies/role-guard";
-import { Role } from "@prisma/client";
+import { Role, TypeSystemUpload } from "@prisma/client";
 import { AuditLog } from "src/audit/audit-log.decorator";
 import { TeamDto } from "src/auth/dto/create-team.dto";
 import { FileInterceptor, FilesInterceptor } from "@nestjs/platform-express";
@@ -14,57 +15,60 @@ import * as csvParser from 'csv-parser';
 import { File as MulterFile } from 'multer';
 import * as multer from 'multer';
 import * as streamifier from 'streamifier';
-import { ApiTags, ApiResponse, ApiConsumes, ApiBody } from "@nestjs/swagger";
+import { ApiTags, ApiResponse, ApiConsumes, ApiBody, ApiParam } from "@nestjs/swagger";
 import { UpdateTeamDto } from "src/auth/dto/update-team.dto";
 import { extname } from "path";
 import { UploadFileDto } from "src/auth/dto/upload-file.dto";
 import { MulterExceptionFilter } from "src/common/multer-exception.filter";
+import { S3Client } from "@aws-sdk/client-s3";
+import { StripeService } from "src/stripe/stripe.service";
 
 
 @ApiTags('Teams')
 @Controller('teams')
-  @UseFilters(MulterExceptionFilter)
+@UseFilters(MulterExceptionFilter)
 export class TeamController {
-  constructor(private teamService: TeamService) { }
+  constructor(
+    private teamService: TeamService
+  ) { }
 
-  // @AuditLog('READ', 'TEAMS')
-  @Get()
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
   @ApiResponse({ status: 200, description: 'List of all teams with subscription & organization info' })
+  @Get()
   getTeams() {
     return this.teamService.findAll();
   }
 
-  @Get(':id')
   @ApiResponse({ status: 200, description: 'Details of a specific team including reviews & ratings' })
   @ApiResponse({ status: 404, description: 'Team not found' })
+  @Get(':id')
   getTeamById(@Param('id') id: string) {
     return this.teamService.findById(id);
   }
 
-  @AuditLog('CREATE', 'TEAM')
-  @Post()
-  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN]))
   @ApiResponse({ status: 201, description: 'Team created successfully' })
   @ApiBody({ type: TeamDto })
+  @AuditLog('CREATE', 'TEAM')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN]))
+  @Post()
   createTeam(@Body() teamDto: TeamDto, @Req() req) {
     return this.teamService.create(teamDto, req.user.userId);
   }
 
-  @AuditLog('UPDATE', 'TEAM')
-  @Patch(':id')
-  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
   @ApiResponse({ status: 200, description: 'Team updated successfully' })
   @ApiBody({ type: UpdateTeamDto })
+  @AuditLog('UPDATE', 'TEAM')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
+  @Patch(':id')
   updateTeam(@Param('id') id: string, @Body() teamDto: UpdateTeamDto, @Req() req) {
     return this.teamService.update(id, teamDto, req.user.userId);
   }
 
+  @ApiResponse({ status: 200, description: 'Team deleted successfully' })
+  @ApiResponse({ status: 400, description: 'Cannot delete team with related reviews' })
   @AuditLog('DELETE', 'TEAM')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   @Delete(':id')
-  @ApiResponse({ status: 200, description: 'Team deleted successfully' })
-  @ApiResponse({ status: 400, description: 'Cannot delete team with related reviews' })
   deleteTeam(@Param('id') id: string) {
     return this.teamService.delete(id);
   }
@@ -79,11 +83,11 @@ export class TeamController {
     },
   })
   @ApiResponse({ status: 201, description: 'CSV uploaded and processed successfully' })
-  @AuditLog('CREATE', 'TEAM_CSV')
-  @Post('upload-csv')
-  @UseInterceptors(FileInterceptor('file'))
-  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN]))
   @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  @AuditLog('CREATE', 'TEAM_CSV')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN]))
+  @Post('upload-csv')
   async uploadCsv(
     @UploadedFile() file: MulterFile,
     @Body('organizationId') organizationId: string,
@@ -116,13 +120,32 @@ export class TeamController {
     return this.teamService.getTeamsWithAccess(req.user.userId, req.user.role);
   }
 
+  @ApiResponse({ status: 200, description: 'Team successfully claimed' })
+  @AuditLog('UPDATE', 'TEAM_CLAIM')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Patch('claim/:teamId')
   async claimTeamByEmail(@Body('email') email: string, @Param('teamId') teamId: string, @Req() req) {
     return this.teamService.claimTeamByEmail(req.user.userId, email, teamId);
   }
 
-  @Post('upload-photos')
+  @ApiBody({
+    schema: {
+      properties: {
+        teamId: {
+          type: 'string',
+          example: 'team_123',
+        },
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+      required: ['teamId', 'files'],
+    },
+  })
   @UseInterceptors(
     FilesInterceptor('files', 5, {
       storage: multer.memoryStorage(),
@@ -135,11 +158,100 @@ export class TeamController {
       // limits: { fileSize: 1 * 1024 * 1024 },
     }),
   )
+  @AuditLog('CREATE', 'TEAM_PHOTOS')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+  @Post('upload-photos')
   async upload(@UploadedFiles() files: MulterFile[], @Body() dto: UploadFileDto) {
     const photoPaths = await this.teamService.uploadTeamPhotos(dto.teamId, files);
     return {
       message: 'Files uploaded successfully',
       photos: photoPaths,
     };
+  }
+
+  @ApiBody({
+    schema: {
+      properties: {
+        teamId: {
+          type: 'string',
+          example: 'team_123',
+        },
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+      required: ['teamId', 'files'],
+    },
+  })
+  @UseInterceptors(
+    FilesInterceptor('files', 5, {
+      storage: multer.memoryStorage(),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          return cb(new BadRequestException('Only image files are allowed!'), false);
+        }
+        cb(null, true);
+      },
+      // limits: { fileSize: 1 * 1024 * 1024 },
+    }),
+  )
+  @AuditLog('CREATE', 'TEAM_PHOTOS_AWS')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+  @Post('upload-photos-aws')
+  async uploadAws(@UploadedFiles() files: MulterFile[], @Body() dto: UploadFileDto) {
+    const photoPaths = await this.teamService.uploadTeamPhotosAws(dto.teamId, files);
+    return {
+      message: 'Files uploaded successfully',
+      photos: photoPaths,
+    };
+  }
+
+  @ApiParam({
+    name: 'typeSystemUpload',
+    enum: TypeSystemUpload,
+    required: true,
+    description: 'Type of system upload',
+  })
+  @ApiBody({
+    schema: {
+      properties: {
+        teamId: {
+          type: 'string',
+          example: 'team_123',
+        },
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+      required: ['teamId', 'files'],
+    },
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 201, description: 'Files uploaded successfully' })
+  @UseInterceptors(
+    FilesInterceptor('files', 5, {
+      storage: multer.memoryStorage(),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          return cb(new BadRequestException('Only image files are allowed!'), false);
+        }
+        cb(null, true);
+      },
+      // limits: { fileSize: 1 * 1024 * 1024 },
+    })
+  )
+  @AuditLog('CREATE', 'TEAM_PHOTOS_AWS_OR_LOCAL')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+  @Post('upload-photos-by/:typeSystemUpload')
+  async uploadTeamPhotosAwsOrLocal(@UploadedFiles() files: MulterFile[], @Body() dto: UploadFileDto, @Param('typeSystemUpload') typeSystem: TypeSystemUpload) {
+    return this.teamService.uploadTeamPhotosAwsOrLocal(dto.teamId, files, typeSystem);
   }
 }

@@ -265,3 +265,8 @@ enum OrgStatus {
   APPROVED
   REJECTED
 }
+
+enum TypeSystemUpload {
+  AWSS3
+  LOCALFOLDER
+}

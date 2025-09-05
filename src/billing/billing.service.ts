@@ -1,18 +1,27 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Role, SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
 import Stripe from 'stripe';
 import { PrismaService } from 'prisma/prisma.service';
 import { StripeService } from 'src/stripe/stripe.service';
 import { ErrorCode } from 'src/common/error-code';
+import { CheckoutDto } from 'src/auth/dto/checkout.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
+  public readonly stripe: Stripe
 
   constructor(
     private prisma: PrismaService,
     private stripeService: StripeService,
-  ) { }
+    private configService: ConfigService
+  ) {
+    this.stripe = new Stripe(configService.get('STRIPE_SECRET_KEY'), {
+      apiVersion: '2025-07-30.basil', // Latest stable version
+      typescript: true,
+    });
+  }
 
   async createSubscription(
     organizationId: string,
@@ -178,20 +187,187 @@ export class BillingService {
       subscription: organization.subscription || null,
     };
   }
-
-
   private getPriceIdForPlan(plan: SubscriptionPlan): string {
     switch (plan) {
-      case SubscriptionPlan.BASIC:
-        return "price_1RwBhNPUzeicXwggiM9ig5b4";
       case SubscriptionPlan.PRO:
-        return process.env.STRIPE_PRO_PRICE_ID;
+        return process.env.STRIPE_PRICE_PRO;
       case SubscriptionPlan.ELITE:
-        return process.env.STRIPE_ELITE_PRICE_ID;
+        return process.env.STRIPE_PRICE_ELITE;
       default:
-        throw new Error('Invalid plan');
+        throw new BadRequestException(ErrorCode.INVALID_PLAN_OR_STRIPE_PRICE);
     }
   }
+
+  async getCheckoutSessionn(body: CheckoutDto, userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new ForbiddenException(ErrorCode.USER_NOT_AUTHORIZED);
+    }
+
+    let priceId: string | undefined;
+
+    priceId = this.getPriceIdForPlan(body.plan);
+
+    if (!priceId) {
+      throw new BadRequestException(ErrorCode.INVALID_PLAN_OR_STRIPE_PRICE);
+    }
+
+    // validate target entity
+    let targetType: 'team' | 'organization' | null = null;
+    let targetId: string | null = null;
+
+    if (body.teamId) {
+      const team = await this.prisma.team.findUnique({
+        where: { id: body.teamId },
+      });
+
+      if (!team) {
+        throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
+      }
+
+      targetType = 'team';
+      targetId = team.id;
+    } else if (body.organizationId) {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: body.organizationId },
+      });
+
+      if (!org) {
+        throw new BadRequestException(ErrorCode.ORGANIZATION_NOT_FOUND);
+      }
+
+      targetType = 'organization';
+      targetId = org.id;
+    } else {
+      throw new BadRequestException(ErrorCode.SOMETHING_WENT_WRONG);
+    }
+
+    // createt Stripe checkout session
+    const session = await this.stripeService.stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        plan: body.plan,
+        [targetType + 'Id']: targetId,
+      },
+      subscription_data: {
+        metadata: {
+          plan: body.plan,
+          [targetType + 'Id']: targetId,
+        },
+      },
+      success_url: `${process.env.APP_URL}/payment_success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL}/payment_cancel.html`,
+    });
+
+    return { url: session.url };
+  }
+
+  async handleWebhook(req, res) {
+    const signature = req.headers['stripe-signature'] as string;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!this.stripe) {
+      return res.status(500).send('Service not available');
+    }
+
+    const rawBody = (req as any).rawBody || req.body;
+    if (!rawBody) {
+      return res.status(400).send('Raw body is required for webhook verification');
+    }
+
+    try {
+      let event = this.stripe.webhooks.constructEvent(
+        rawBody,
+        signature,
+        webhookSecret
+      );
+
+      if (event.type === 'invoice.payment_succeeded') {
+        const invoice = event.data.object as Stripe.Invoice & {
+          parent?: {
+            subscription_details?: {
+              subscription?: string
+              metadata?: Record<string, string>
+            }
+          }
+        };
+
+        const subscriptionId = invoice.parent?.subscription_details?.subscription;
+
+        if (!subscriptionId) {
+          console.error("❌ No subscription ID on invoice", invoice.id);
+          return res.status(400).send("Missing subscription ID");
+        }
+
+        const subscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+        const newPlan = subscription.metadata.plan as SubscriptionPlan;
+        const orgId = subscription.metadata.organizationId;
+        const teamId = subscription.metadata.teamId;
+
+        if (!newPlan) {
+          console.error("❌ Webhook Error: missing plan in metadata");
+          return res.status(400).send("Missing plan in metadata");
+        }
+
+        if (orgId) {
+          // Upsert subscription for organization
+          await this.prisma.subscription.upsert({
+            where: { organizationId: orgId },
+            update: { plan: newPlan },
+            create: { organizationId: orgId, plan: newPlan, status: "ACTIVE" },
+          });
+
+          // Update all team subscriptions under this org
+          await this.prisma.subscription.updateMany({
+            where: { team: { organizationId: orgId } },
+            data: { plan: newPlan },
+          });
+
+        } else if (teamId) {
+          // Upsert subscription for team
+          await this.prisma.subscription.upsert({
+            where: { teamId },
+            update: { plan: newPlan },
+            create: { teamId, plan: newPlan, status: "ACTIVE" },
+          });
+        } else {
+          console.error("❌ Webhook Error: no organizationId or teamId in metadata");
+        }
+
+        // Customer email sync
+        if (!invoice.customer_email && invoice.customer) {
+          try {
+            const customer = await this.stripe.customers.retrieve(invoice.customer as string) as Stripe.Customer;
+
+            if (customer.email) {
+              await this.stripe.customers.update(invoice.customer as string, {
+                email: customer.email,
+              });
+              console.log('📧 Customer email updated, Stripe will auto-send receipt');
+            }
+          } catch (error) {
+            console.error('Error handling customer email:', error);
+          }
+        }
+
+        console.log('📧 Receipt will be auto-sent by Stripe for invoice:', invoice.id);
+      }
+
+      return res.status(200).json({ received: true });
+    } catch (err) {
+      console.error('❌ Webhook Error:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+  }
+
 }
 
 
