@@ -201,7 +201,7 @@ export class TeamService {
 
                 // Cek role
                 if (user.role === Role.ORG_ADMIN || user.role === Role.SITE_ADMIN) {
-                    throw new ForbiddenException(
+                   throw new ForbiddenException(
                         `User with role ${user.role} cannot claim a team`,
                     );
                 }
@@ -735,9 +735,6 @@ export class TeamService {
         }
     }
 
-<<<<<<< HEAD
-}
-=======
     async deleteTeamPhotos(teamId: string) {
         const team = await this.prisma.team.findUnique({ where: { id: teamId } });
         if (!team) {
@@ -763,4 +760,3 @@ export class TeamService {
         return this.prisma.teamPhoto.deleteMany({ where: { teamId } });
     }
 }
->>>>>>> fc5509096113e1d9cc395db04e1332d45b0d829d
