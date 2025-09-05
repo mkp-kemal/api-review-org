@@ -1,5 +1,6 @@
 import {
   BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post,
+  Query,
   Req,
   UploadedFile, UploadedFiles, UseFilters, UseGuards, UseInterceptors
 } from "@nestjs/common";
@@ -20,6 +21,7 @@ import { extname } from "path";
 import { UploadFileDto } from "src/auth/dto/upload-file.dto";
 import { MulterExceptionFilter } from "src/common/multer-exception.filter";
 import { S3Client } from "@aws-sdk/client-s3";
+import { StripeService } from "src/stripe/stripe.service";
 
 
 @ApiTags('Teams')
@@ -27,7 +29,7 @@ import { S3Client } from "@aws-sdk/client-s3";
 @UseFilters(MulterExceptionFilter)
 export class TeamController {
   constructor(
-    private teamService: TeamService,
+    private teamService: TeamService
   ) { }
 
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))

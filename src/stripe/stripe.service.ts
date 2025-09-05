@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import Stripe from 'stripe';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from 'prisma/prisma.service';
 
 @Injectable()
 export class StripeService {
   public readonly stripe: Stripe;
-
-  constructor(private configService: ConfigService) {
+  constructor(private configService: ConfigService, private prisma: PrismaService) {
     this.stripe = new Stripe(configService.get('STRIPE_SECRET_KEY'), {
       apiVersion: '2025-07-30.basil', // Latest stable version
       typescript: true,
@@ -70,7 +70,7 @@ export class StripeService {
       currency,
       customer: customerId,
       payment_method: paymentMethodId,
-      setup_future_usage: 'off_session', // <- ini penting
+      setup_future_usage: 'off_session', // important
       automatic_payment_methods: { enabled: true },
     });
   }
@@ -95,6 +95,55 @@ export class StripeService {
   }
 
   async confirmPaymentIntent(paymentIntentId: string) {
-  return await this.stripe.paymentIntents.confirm(paymentIntentId);
-}
+    return await this.stripe.paymentIntents.confirm(paymentIntentId);
+  }
+
+  async getCheckoutSession(sessionId: string) {
+    const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription', 'subscription.default_payment_method'],
+    });
+
+    const subscription = session.subscription as Stripe.Subscription;
+
+    let team = null;
+    if (session.metadata?.teamId) {
+      team = await this.prisma.team.findUnique({
+        where: { id: session.metadata.teamId },
+      });
+    }
+
+    let organization = null;
+    if (session.metadata?.organizationId) {
+      organization = await this.prisma.organization.findUnique({
+        where: { id: session.metadata.organizationId },
+      });
+    }
+
+    // get payment method
+    const pm = subscription?.default_payment_method as Stripe.PaymentMethod;
+    let method = null;
+
+    if (pm?.type === 'card') {
+      method = `${pm.card?.brand.toUpperCase()} •••• ${pm.card?.last4} (exp ${pm.card?.exp_month}/${pm.card?.exp_year})`;
+    } else {
+      method = pm?.type || null;
+    }
+
+    return {
+      email: session.customer_details?.email || null,
+      targetName: team?.name || organization?.name || null, // nama team/org
+      amount_total: session.amount_total,
+      method, // format: VISA •••• 4242 (exp 12/2034)
+      currency: session.currency,
+      plan: session.metadata.plan || "-",
+      created: new Date(session.created * 1000),
+    };
+  }
+
+
+  async attachSubscriptionToDb(sessionId: string) {
+    const session = await this.getCheckoutSession(sessionId);
+
+    return session;
+  }
 }
