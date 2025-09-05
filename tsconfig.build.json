@@ -4,6 +4,6 @@
     "outDir": "./dist",
     "removeComments": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }
