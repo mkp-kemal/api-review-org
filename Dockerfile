@@ -25,4 +25,4 @@ COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 EXPOSE 4002
 
 # langsung pakai node (lebih cepat dari yarn start:prod)
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
