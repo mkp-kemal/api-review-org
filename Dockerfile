@@ -14,15 +14,15 @@ FROM node:18-alpine AS production
 WORKDIR /usr/src/app
 
 COPY package.json yarn.lock ./
-# install hanya dependencies runtime (lebih kecil)
+# RUN yarn install
 RUN yarn install --frozen-lockfile --production
 
-# Copy build hasil dari builder
+# Copy built files
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/prisma ./prisma
 COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 
 EXPOSE 4002
 
-# langsung pakai node (lebih cepat dari yarn start:prod)
+# Run the app
 CMD ["node", "dist/src/main.js"]

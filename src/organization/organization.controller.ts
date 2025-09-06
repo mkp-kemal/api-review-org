@@ -192,6 +192,17 @@ export class OrganizationController {
     return this.orgService.claimOrg(id, req.user.userId, emailDomain);
   }
 
+  @AuditLog('UPDATE', 'ORGANIZATION_CLAIM_STATUS')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+  @Patch(':id/claim/:status')
+  async changeClaimStatus(@Param('id') id: string, @Param('status') status: 'approve' | 'reject', @Req() req) {
+    if (status !== 'approve' && status !== 'reject') {
+      throw new BadRequestException('Invalid status');
+    }
+
+    return this.orgService.changeClaimStatus(id, status, req.user.userId);
+  }
+
   @ApiResponse({ status: 201, description: 'Organization deleted successfully' })
   @AuditLog('DELETE', 'ORGANIZATION')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))

@@ -197,6 +197,48 @@ export class OrganizationService {
     };
   }
 
+  async changeClaimStatus(orgId: string, status: 'approve' | 'reject', userId: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+    });
+
+    if (!org) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (!org.claimedById) {
+      throw new BadRequestException('No claim found for this organization');
+    }
+
+    let newStatus: 'APPROVED' | 'REJECTED';
+    if (status === 'approve') {
+      newStatus = 'APPROVED';
+
+      await this.prisma.organization.update({
+        where: {id: orgId},
+        data: {
+          rejectedReason: null
+        }
+      })
+    } else if (status === 'reject') {
+      newStatus = 'REJECTED';
+    } else {
+      throw new BadRequestException('Invalid status');
+    }
+
+    const updated = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        status: newStatus,
+        approvedById: userId,
+        rejectedReason: newStatus === 'REJECTED' ? 'Claim rejected by admin' : null,
+        updatedAt: new Date(),
+      },
+    });
+
+    return updated;
+  }
+
   async delete(id: string) {
     const org = await this.findById(id);
 
