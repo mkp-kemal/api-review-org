@@ -10,7 +10,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import * as csvParser from 'csv-parser';
 import { File as MulterFile } from 'multer';
 import * as streamifier from 'streamifier';
-import { ApiBody, ApiOkResponse, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOkResponse, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UpdateOrganizationDto } from 'src/auth/dto/update-organization.dto';
 
 @ApiTags('Organization')
@@ -55,6 +55,11 @@ export class OrganizationController {
         },
       },
     },
+  })
+  @ApiParam({
+    name: 'name',
+    enum: OrgStatus,
+    required: true,
   })
   // @AuditLog('READ', 'ORGANIZATION')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
@@ -192,6 +197,11 @@ export class OrganizationController {
     return this.orgService.claimOrg(id, req.user.userId, emailDomain);
   }
 
+  @ApiParam({
+    name: 'status',
+    enum: ['approve', 'reject'],
+    required: true,
+  })
   @AuditLog('UPDATE', 'ORGANIZATION_CLAIM_STATUS')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   @Patch(':id/claim/:status')

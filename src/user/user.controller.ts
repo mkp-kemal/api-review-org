@@ -2,7 +2,7 @@ import { Controller, Get, Param, UseGuards, Req, Patch, BadRequestException } fr
 import { UserService } from './user.service';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 import { AuditLog } from 'src/audit/audit-log.decorator';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { RoleGuard } from 'src/auth/strategies/role-guard';
 
@@ -46,19 +46,26 @@ export class UserController {
       },
     },
   })
-  @AuditLog('READ', 'USERS')
-  @UseGuards(JwtAuthGuard)
-  @Get()
-  async listUsers() {
-    return this.userService.findAll();
-  }
-
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   @Get('all')
   async listAllUsers() {
     return this.userService.findAll();
   }
   
+  @ApiParam({
+      name: 'status',
+      enum: ['ban', 'unban'],
+      required: true,
+    })
+    @ApiBody({
+      schema: {
+        properties: {
+          id: { type: 'string', example: 'uuid-1234-5678' },
+        },
+        required: ['teamId', 'files'],
+      },
+    })
+  @AuditLog('UPDATE', 'USERS_ISBANNED')
   @Patch(':id/:status')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   async banUser(@Param('id') id: string, @Param('status') status: 'ban' | 'unban') {

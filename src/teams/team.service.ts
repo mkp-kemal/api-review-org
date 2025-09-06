@@ -7,13 +7,15 @@ import { extname, join } from "path";
 import * as fs from 'node:fs/promises';
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { ErrorCode } from "src/common/error-code";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import Redis from "ioredis";
 
 @Injectable()
 export class TeamService {
     private s3: S3Client
     private bucketName = process.env.AWS_S3_BUCKET;
 
-    constructor(private prisma: PrismaService) {
+    constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis) {
         this.s3 = new S3Client({
             region: process.env.AWS_REGION,
             credentials: {
@@ -24,6 +26,13 @@ export class TeamService {
     }
 
     async findAll() {
+        const cacheKey = 'teams:all';
+        const cached = await this.redis.get(cacheKey);
+
+        if (cached) {
+            return JSON.parse(cached);
+        }
+        
         return this.prisma.team.findMany({
             select: {
                 id: true,

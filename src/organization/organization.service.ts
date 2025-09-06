@@ -1,13 +1,22 @@
+import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { OrgStatus, Role, SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
+import Redis from 'ioredis';
 import { PrismaService } from 'prisma/prisma.service';
 import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
 
 @Injectable()
 export class OrganizationService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis) { }
 
   async findAll(query: { name?: string; state?: string; city?: string, isFilterByStatus?: OrgStatus }) {
+    const cacheKey = `organizations`;
+    const cached = await this.redis.get(cacheKey);
+
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
     const { name, state, city, isFilterByStatus } = query;
 
     return this.prisma.organization.findMany({
