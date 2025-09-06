@@ -145,6 +145,8 @@ export class AuthService {
 
         if (!user.isVerified) throw new ForbiddenException(ErrorCode.EMAIL_NOT_VERIFIED);
 
+        if (user.isBanned) throw new ForbiddenException(ErrorCode.USER_BANNED);
+
         // sign tokens
         const accessToken = await this.signAccessToken(user.id, user.role, user.email);
         const refresh = await this.createRefreshToken(user.id);

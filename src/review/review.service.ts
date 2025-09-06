@@ -1,4 +1,6 @@
+import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import Redis from 'ioredis';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateResponseReviewDto } from 'src/auth/dto/create-response-review.dto';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
@@ -8,7 +10,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class ReviewService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis,
+    ) { }
 
     async createReview(
         userId: string,
@@ -187,19 +190,28 @@ export class ReviewService {
     }
 
 
-    async getReviews(sort: 'recent' | 'rating' = 'recent', isByPublic = true) {
+    async getReviews(
+        sort: 'recent' | 'rating' = 'recent',
+        isByPublic = true,
+    ) {
+        const cacheKey = `reviews:${sort}:${isByPublic}`;
+        const cached = await this.redis.get(cacheKey);
+
+        if (cached) {
+            return JSON.parse(cached);
+        }
+
         const orderBy =
             sort === 'rating'
                 ? { rating: { overall: 'desc' as const } }
                 : { createdAt: 'desc' as const };
 
         const where: any = {};
-
         if (isByPublic) {
             where.isPublic = true;
         }
 
-        return this.prisma.review.findMany({
+        const reviews = await this.prisma.review.findMany({
             where,
             orderBy,
             include: {
@@ -225,18 +237,22 @@ export class ReviewService {
                     select: {
                         id: true,
                         reporter: {
-                            select: {
-                                email: true
-                            }
+                            select: { email: true },
                         },
                         status: true,
                         reason: true,
-                        createdAt: true
-                    }
-                }
+                        createdAt: true,
+                    },
+                },
             },
         });
+
+        // save to redis 60 seconds
+        await this.redis.set(cacheKey, JSON.stringify(reviews), 'EX', 60);
+
+        return reviews;
     }
+
 
     async getReview(id: string) {
         const review = await this.prisma.review.findUnique({

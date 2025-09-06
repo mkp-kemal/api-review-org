@@ -1,6 +1,5 @@
 import {
   BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post,
-  Query,
   Req,
   UploadedFile, UploadedFiles, UseFilters, UseGuards, UseInterceptors
 } from "@nestjs/common";
@@ -17,11 +16,8 @@ import * as multer from 'multer';
 import * as streamifier from 'streamifier';
 import { ApiTags, ApiResponse, ApiConsumes, ApiBody, ApiParam } from "@nestjs/swagger";
 import { UpdateTeamDto } from "src/auth/dto/update-team.dto";
-import { extname } from "path";
 import { UploadFileDto } from "src/auth/dto/upload-file.dto";
 import { MulterExceptionFilter } from "src/common/multer-exception.filter";
-import { S3Client } from "@aws-sdk/client-s3";
-import { StripeService } from "src/stripe/stripe.service";
 
 
 @ApiTags('Teams')

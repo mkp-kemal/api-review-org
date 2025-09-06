@@ -7,13 +7,15 @@ import { extname, join } from "path";
 import * as fs from 'node:fs/promises';
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { ErrorCode } from "src/common/error-code";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import Redis from "ioredis";
 
 @Injectable()
 export class TeamService {
     private s3: S3Client
     private bucketName = process.env.AWS_S3_BUCKET;
 
-    constructor(private prisma: PrismaService) {
+    constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis) {
         this.s3 = new S3Client({
             region: process.env.AWS_REGION,
             credentials: {
@@ -24,6 +26,13 @@ export class TeamService {
     }
 
     async findAll() {
+        const cacheKey = 'teams:all';
+        const cached = await this.redis.get(cacheKey);
+
+        if (cached) {
+            return JSON.parse(cached);
+        }
+        
         return this.prisma.team.findMany({
             select: {
                 id: true,
@@ -189,7 +198,6 @@ export class TeamService {
             let totalClaims = 0;
 
             if (data.email) {
-                // Cari user berdasarkan email
                 user = await this.prisma.user.findUnique({
                     where: { email: data.email },
                     include: { teamClaims: true },
@@ -199,7 +207,7 @@ export class TeamService {
                     throw new NotFoundException(`User with email ${data.email} not found`);
                 }
 
-                // Cek role
+
                 if (user.role === Role.ORG_ADMIN || user.role === Role.SITE_ADMIN) {
                    throw new ForbiddenException(
                         `User with role ${user.role} cannot claim a team`,
@@ -215,13 +223,13 @@ export class TeamService {
                 totalClaims = user.teamClaims.length + 1;
             }
 
-            // Buat team + subscription dalam transaksi biar aman
+
             const { email, ...teamData } = data;
 
             const [team] = await this.prisma.$transaction([
                 this.prisma.team.create({
                     data: {
-                        ...teamData,  // ini hanya berisi name, ageLevel, division, state, city, organizationId
+                        ...teamData,
                         claimedById: user?.id ?? null,
                         subscription: {
                             create: {
@@ -246,22 +254,24 @@ export class TeamService {
                     : []),
             ]);
 
-            await this.prisma.auditLog.create({
-                data: {
-                    actor: {
-                        connect: { id: userId || Role.ANONYMOUS }
+            if (user) {
+                await this.prisma.auditLog.create({
+                    data: {
+                        actor: {
+                            connect: { id: userId || Role.ANONYMOUS }
+                        },
+                        action: 'UPDATE',
+                        targetType: 'ROLE_USER',
+                        targetId: user?.id,
+                        metadata: {
+                            team,
+                            message: user
+                                ? `User with email ${data.email} has now claimed ${totalClaims} teams including this one`
+                                : `Team created without user claim`,
+                        }
                     },
-                    action: 'UPDATE',
-                    targetType: 'ROLE_USER',
-                    targetId: user.id,
-                    metadata: {
-                        team,
-                        message: user
-                            ? `User with email ${data.email} has now claimed ${totalClaims} teams including this one`
-                            : `Team created without user claim`,
-                    }
-                },
-            });
+                });
+            }
 
             return {
                 team,
@@ -272,11 +282,12 @@ export class TeamService {
         } catch (error) {
             console.error('Error creating team:', error);
             if (error instanceof NotFoundException || error instanceof ForbiddenException) {
-                throw error; // biarkan NestJS handle
+                throw error;
             }
             throw new InternalServerErrorException('Failed to create team');
         }
     }
+
     async update(id: string, data: any, userId: string) {
 
         if (data.status === 'REJECTED' && !data.rejectedReason) {
@@ -591,7 +602,7 @@ export class TeamService {
             throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
         }
 
-        if(team.status != OrgStatus.APPROVED) {
+        if (team.status != OrgStatus.APPROVED) {
             throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
         }
 
@@ -647,7 +658,7 @@ export class TeamService {
             throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
         }
 
-        if(team.status != OrgStatus.APPROVED) {
+        if (team.status != OrgStatus.APPROVED) {
             throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
         }
 
@@ -705,7 +716,7 @@ export class TeamService {
             throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
         }
 
-        if(team.status != OrgStatus.APPROVED) {
+        if (team.status != OrgStatus.APPROVED) {
             throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
         }
 

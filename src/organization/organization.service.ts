@@ -1,13 +1,22 @@
+import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { OrgStatus, Role, SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
+import Redis from 'ioredis';
 import { PrismaService } from 'prisma/prisma.service';
 import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
 
 @Injectable()
 export class OrganizationService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis) { }
 
   async findAll(query: { name?: string; state?: string; city?: string, isFilterByStatus?: OrgStatus }) {
+    const cacheKey = `organizations`;
+    const cached = await this.redis.get(cacheKey);
+
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
     const { name, state, city, isFilterByStatus } = query;
 
     return this.prisma.organization.findMany({
@@ -195,6 +204,48 @@ export class OrganizationService {
     return {
       message: 'Organization claimed successfully',
     };
+  }
+
+  async changeClaimStatus(orgId: string, status: 'approve' | 'reject', userId: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+    });
+
+    if (!org) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (!org.claimedById) {
+      throw new BadRequestException('No claim found for this organization');
+    }
+
+    let newStatus: 'APPROVED' | 'REJECTED';
+    if (status === 'approve') {
+      newStatus = 'APPROVED';
+
+      await this.prisma.organization.update({
+        where: {id: orgId},
+        data: {
+          rejectedReason: null
+        }
+      })
+    } else if (status === 'reject') {
+      newStatus = 'REJECTED';
+    } else {
+      throw new BadRequestException('Invalid status');
+    }
+
+    const updated = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        status: newStatus,
+        approvedById: userId,
+        rejectedReason: newStatus === 'REJECTED' ? 'Claim rejected by admin' : null,
+        updatedAt: new Date(),
+      },
+    });
+
+    return updated;
   }
 
   async delete(id: string) {

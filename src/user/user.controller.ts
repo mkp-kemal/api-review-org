@@ -1,8 +1,10 @@
-import { Controller, Get, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Req, Patch, BadRequestException } from '@nestjs/common';
 import { UserService } from './user.service';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 import { AuditLog } from 'src/audit/audit-log.decorator';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
+import { RoleGuard } from 'src/auth/strategies/role-guard';
 
 @ApiTags('Users')
 @Controller('users')
@@ -22,7 +24,6 @@ export class UserController {
       },
     },
   })
-  @AuditLog('READ', 'USER_PROFILE')
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getProfile(@Req() req) {
@@ -45,10 +46,33 @@ export class UserController {
       },
     },
   })
-  @AuditLog('READ', 'USERS')
-  @UseGuards(JwtAuthGuard)
-  @Get()
-  async listUsers() {
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+  @Get('all')
+  async listAllUsers() {
     return this.userService.findAll();
+  }
+  
+  @ApiParam({
+      name: 'status',
+      enum: ['ban', 'unban'],
+      required: true,
+    })
+    @ApiBody({
+      schema: {
+        properties: {
+          id: { type: 'string', example: 'uuid-1234-5678' },
+        },
+        required: ['teamId', 'files'],
+      },
+    })
+  @AuditLog('UPDATE', 'USERS_ISBANNED')
+  @Patch(':id/:status')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+  async banUser(@Param('id') id: string, @Param('status') status: 'ban' | 'unban') {
+    if (status !== 'ban' && status !== 'unban') {
+          throw new BadRequestException('Invalid status');
+        }
+    
+    return this.userService.ban(id, status);
   }
 }

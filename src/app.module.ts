@@ -16,6 +16,7 @@ import { AuditLogModule } from './audit/audit-log.module';
 import { BillingModule } from './billing/billing.module';
 import { StripeModule } from './stripe/stripe.module';
 import { TeamModule } from './teams/team.module';
+import { RedisModule } from './redis/redis.module';
 
 
 @Module({
@@ -40,7 +41,8 @@ import { TeamModule } from './teams/team.module';
     AuditLogModule,
     BillingModule,
     StripeModule,
-    TeamModule
+    TeamModule,
+    RedisModule
   ],
 })
 export class AppModule {}
