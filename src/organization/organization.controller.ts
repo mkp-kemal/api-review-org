@@ -191,6 +191,7 @@ export class OrganizationController {
   @AuditLog('UPDATE', 'ORGANIZATION_CLAIM')
   @UseGuards(JwtAuthGuard, RoleGuard([Role.REVIEWER, Role.SITE_ADMIN]))
   @Patch(':id/claim')
+
   async claimOrg(@Param('id') id: string, @Req() req) {
     const emailDomain = req.user.email?.split('@')[1];
 
