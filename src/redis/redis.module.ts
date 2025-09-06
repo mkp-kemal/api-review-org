@@ -5,7 +5,7 @@ import { RedisModule as NestRedisModule } from '@nestjs-modules/ioredis';
     imports: [
         NestRedisModule.forRoot({
             type: 'single', // type of redis: single or cluster
-            url: 'redis://localhost:6379',
+            url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
         }),
     ],
     exports: [NestRedisModule],
