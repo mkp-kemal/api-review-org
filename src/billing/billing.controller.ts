@@ -22,7 +22,6 @@ export class BillingController {
   public readonly stripe: Stripe
   constructor(private readonly billingService: BillingService, private readonly stripeService: StripeService, private readonly prisma: PrismaService) { }
 
-  // @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.TEAM_ADMIN]))
   @Post('webhook')
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     return this.billingService.handleWebhook(req, res);

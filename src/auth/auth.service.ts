@@ -17,14 +17,14 @@ export class AuthService {
     ) { }
 
     async register(dto: RegisterDto) {
-        // check email
+        
         const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
         if (existing) throw new BadRequestException(ErrorCode.EMAIL_ALREADY_REGISTERED);
 
-        // Hash password
+        
         const hash = await bcrypt.hash(dto.password, 12);
 
-        // create user
+        
         const user = await this.prisma.user.create({
             data: {
                 email: dto.email,
@@ -34,13 +34,13 @@ export class AuthService {
             },
         });
 
-        // create verification token
+        
         const verifyToken = this.jwt.sign(
             { sub: user.id },
             { secret: this.config.get('JWT_EMAIL_VERIFICATION_SECRET'), expiresIn: '1d' },
         );
 
-        // send verification email
+        
         await this.emailService.sendVerificationEmail(user.email, verifyToken);
 
         return { message: 'Registered. Check your email to verify.' };
@@ -65,21 +65,20 @@ export class AuthService {
     private userResendMap = new Map<string, Map<string, { count: number; expiresAt: Date }>>();
 
     async resendVerificationEmail(token: string) {
-        // verify token
         let payload: any;
+
         try {
             payload = this.jwt.verify(token, {
                 secret: this.config.get('JWT_EMAIL_VERIFICATION_SECRET'),
+                ignoreExpiration: true,
             });
         } catch (error) {
-            throw new BadRequestException(ErrorCode.INVALID_OR_EXPIRED_TOKEN);
+            throw new BadRequestException(ErrorCode.INVALID_TOKEN);
         }
 
-        // check user
         const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
         if (!user) throw new NotFoundException(ErrorCode.USER_NOT_FOUND);
 
-        // check cooldown
         const now = new Date();
         if (!this.userResendMap.has(user.email)) {
             this.userResendMap.set(user.email, new Map());
@@ -91,29 +90,22 @@ export class AuthService {
         if (tokenInfo && now < tokenInfo.expiresAt) {
             const remainingMs = tokenInfo.expiresAt.getTime() - now.getTime();
             throw new BadRequestException(
-                `Please wait ${this.formatDuration(remainingMs)} before resending the verification email`
+                `Please wait ${this.formatDuration(remainingMs)} before resending the verification email`,
             );
         }
 
-        // send verification email
         const verifyToken = this.jwt.sign(
             { sub: user.id },
             { secret: this.config.get('JWT_EMAIL_VERIFICATION_SECRET'), expiresIn: '1d' },
         );
+
         await this.emailService.sendVerificationEmail(user.email, verifyToken);
 
-        // update token info
         const count = (tokenInfo?.count || 0) + 1;
-        let cooldownMs: number;
-        if (count >= 2) {
-            cooldownMs = 24 * 60 * 60 * 1000; // 1 hari
-        } else {
-            cooldownMs = 60 * 1000; // 1 menit
-        }
+        const cooldownMs = count >= 2 ? 24 * 60 * 60 * 1000 : 60 * 1000;
 
         tokenMap.set(token, { count, expiresAt: new Date(Date.now() + cooldownMs) });
 
-        // delete token after cooldown
         setTimeout(() => {
             tokenMap.delete(token);
             if (tokenMap.size === 0) this.userResendMap.delete(user.email);
@@ -123,13 +115,12 @@ export class AuthService {
     }
 
 
+
     async validateUser(email: string, pass: string) {
-        // check email
         const user = await this.prisma.user.findUnique({ where: { email } });
 
         if (!user) return null;
 
-        // check password
         const ok = await bcrypt.compare(pass, user.passwordHash);
 
         if (!ok) return null;
@@ -138,7 +129,6 @@ export class AuthService {
     }
 
     async login(email: string, password: string) {
-        // validate user
         const user = await this.validateUser(email, password);
 
         if (!user) throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS);
@@ -147,7 +137,6 @@ export class AuthService {
 
         if (user.isBanned) throw new ForbiddenException(ErrorCode.USER_BANNED);
 
-        // sign tokens
         const accessToken = await this.signAccessToken(user.id, user.role, user.email);
         const refresh = await this.createRefreshToken(user.id);
 
@@ -162,14 +151,12 @@ export class AuthService {
     }
 
     private async createRefreshToken(userId: string) {
-        // create refresh token
         const expiresIn = this.config.get('JWT_REFRESH_EXPIRES_IN') || '7d';
         const expiresAt = new Date(Date.now() + this.msFromExpString(expiresIn));
         const record = await this.prisma.refreshToken.create({
             data: { userId, expiresAt },
         });
 
-        // sign JWT with jti = record.id
         const token = await this.jwt.signAsync(
             { sub: userId, jti: record.id },
             { secret: this.config.get('JWT_REFRESH_SECRET'), expiresIn },
@@ -180,7 +167,6 @@ export class AuthService {
 
     async refreshToken(token: string) {
         try {
-            // verify
             const payload = this.jwt.verify(token, { secret: this.config.get('JWT_REFRESH_SECRET') }) as any;
             const tokenId = payload.jti;
             const userId = payload.sub;
@@ -190,7 +176,6 @@ export class AuthService {
             if (!stored || stored.revoked) throw new UnauthorizedException();
             if (stored.expiresAt < new Date()) throw new UnauthorizedException();
 
-            // update refresh
             await this.prisma.refreshToken.update({ where: { id: tokenId }, data: { revoked: true } });
             const newRefresh = await this.createRefreshToken(userId);
             const accessToken = await this.signAccessToken(userId, (await this.prisma.user.findUnique({ where: { id: userId } })).role, (await this.prisma.user.findUnique({ where: { id: userId } })).email);
@@ -202,11 +187,10 @@ export class AuthService {
     }
 
     async forgotPassword(email: string) {
-        // check email
         if (!email) throw new BadRequestException(ErrorCode.EMAIL_REQUIRED);
 
         const user = await this.prisma.user.findUnique({ where: { email } });
-        
+
         if (!user) throw new NotFoundException(ErrorCode.EMAIL_NOT_FOUND);
 
         if (!user.isVerified) throw new ForbiddenException(ErrorCode.EMAIL_NOT_VERIFIED);
@@ -222,11 +206,9 @@ export class AuthService {
     }
 
     async resetPassword(userId: string, newPassword: string) {
-        // check user
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user) throw new NotFoundException(ErrorCode.USER_NOT_FOUND);
 
-        // update password
         const hashed = await bcrypt.hash(newPassword, 12);
 
         await this.prisma.user.update({
@@ -282,7 +264,7 @@ export class AuthService {
         return { message: 'Email verified successfully' };
     }
 
-    async verifyPassword (token: string) {
+    async verifyPassword(token: string) {
         let payload: any;
         try {
             payload = this.jwt.verify(token, {

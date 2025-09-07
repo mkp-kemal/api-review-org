@@ -61,7 +61,7 @@ export class OrganizationController {
     enum: OrgStatus,
     required: true,
   })
-  // @AuditLog('READ', 'ORGANIZATION')
+  
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Get()
   async listOrgs(
@@ -222,7 +222,7 @@ export class OrganizationController {
     return this.orgService.delete(id);
   }
 
-  // @UseGuards(OptionalJwtAuthGuard)
+  
   @Get('with/teams')
   async listTeamsAndOrganizations(
     @Query('search') search?: string

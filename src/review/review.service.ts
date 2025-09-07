@@ -47,13 +47,13 @@ export class ReviewService {
             throw new ForbiddenException("Admins are not allowed to submit reviews");
         }
 
-        // Cek id team
+        
         const team = await this.prisma.team.findUnique({ where: { id: teamId } });
         if (!team) {
             throw new BadRequestException('Team not found');
         }
 
-        // Cek uniqueness berdasarkan user, team, season term + year
+        
         const exists = await this.prisma.review.findUnique({
             where: {
                 userId_teamId_season_term_season_year: {
@@ -70,11 +70,11 @@ export class ReviewService {
             );
         }
 
-        // Hitung overall rating
+        
         const overall =
             (dto.coaching + dto.development + dto.transparency + dto.culture + dto.safety) / 5;
 
-        // Simpan review dengan snapshot usia tim
+        
         const review = await this.prisma.review.create({
             data: {
                 userId,
@@ -88,7 +88,7 @@ export class ReviewService {
             },
         });
 
-        // Simpan rating
+        
         await this.prisma.rating.create({
             data: {
                 reviewId: review.id,
@@ -101,7 +101,7 @@ export class ReviewService {
             },
         });
 
-        // Ambil kembali review lengkap beserta relasi
+        
         const result = await this.prisma.review.findUnique({
             where: { id: review.id },
             include: {
@@ -138,7 +138,7 @@ export class ReviewService {
         const overall =
             (dto.coaching + dto.development + dto.transparency + dto.culture + dto.safety) / 5;
 
-        // Update review fields
+        
         await this.prisma.review.update({
             where: { id: review.id },
             data: {
@@ -149,7 +149,7 @@ export class ReviewService {
             },
         });
 
-        // Update rating terkait
+        
         await this.prisma.rating.update({
             where: { reviewId: review.id },
             data: {
@@ -162,7 +162,7 @@ export class ReviewService {
             },
         });
 
-        // Return review lengkap dengan rating
+        
         return this.prisma.review.findUnique({
             where: { id: review.id },
             include: { rating: true, orgResponse: true, team: { include: { organization: true } } },
@@ -247,7 +247,7 @@ export class ReviewService {
             },
         });
 
-        // save to redis 60 seconds
+        
         await this.redis.set(cacheKey, JSON.stringify(reviews), 'EX', 60);
 
         return reviews;
@@ -269,7 +269,7 @@ export class ReviewService {
         orgUserId: string,
         dto: CreateResponseReviewDto
     ) {
-        // 1. get review
+        
         const review = await this.prisma.review.findUnique({
             where: { id: reviewId },
             include: { team: { include: { subscription: true } } }
@@ -279,7 +279,7 @@ export class ReviewService {
             throw new NotFoundException(ErrorCode.REVIEW_NOT_FOUND);
         }
 
-        // 2. get organization + subscription
+        
         const organization = await this.prisma.organization.findUnique({
             where: { id: review.team.organizationId },
             include: { subscription: true }
@@ -289,30 +289,30 @@ export class ReviewService {
             throw new NotFoundException(ErrorCode.ORGANIZATION_NOT_FOUND);
         }
 
-        // 3. determine effective plan
+        
         const teamPlan = review.team.subscription?.plan;
         const orgPlan = organization.subscription?.plan;
         const effectivePlan = teamPlan || orgPlan;
 
-        // 4. check if plan allows responding
+        
         if (!['PRO', 'ELITE'].includes(effectivePlan)) {
             throw new ForbiddenException(ErrorCode.PLAN_NOT_SUPPORTED);
         }
 
-        // 5. check if response already exists
+        
         const existingResponse = await this.prisma.orgResponse.findUnique({
             where: { reviewId },
         });
 
         if (existingResponse) {
-            // update response
+            
             return this.prisma.orgResponse.update({
                 where: { reviewId },
                 data: { body: dto.body },
             });
         }
 
-        // 6. create response
+        
         return this.prisma.orgResponse.create({
             data: {
                 reviewId,
@@ -343,15 +343,31 @@ export class ReviewService {
 
         return this.prisma.review.findMany({
             where: {
-                team: {
-                    organizationId: {
-                        in: orgIds
-                    }
-                }
+                OR: [
+                    {
+                        team: {
+                            organization: { claimedById: userId }, 
+                        },
+                    },
+                    {
+                        team: { claimedById: userId }, 
+                    },
+                ],
             },
             include: {
                 rating: true,
                 orgResponse: true,
+                flags: {
+                    select: {
+                        id: true,
+                        reporter: {
+                            select: { email: true },
+                        },
+                        status: true,
+                        reason: true,
+                        createdAt: true,
+                    },
+                },
                 team: {
                     include: {
                         organization: true

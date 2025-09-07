@@ -18,15 +18,16 @@ async function bootstrap() {
   });
 
   // app.use(new StripeRawBodyMiddleware().use);
+  
   // Add raw body for Stripe webhook
   app.use('/billing/webhook', bodyParser.raw({ type: 'application/json' }));
 
-  // ✅ Enable class-validator globally
+  // Enable class-validator globally
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // hapus property yang tidak ada di DTO
-      forbidNonWhitelisted: true, // kalau ada property asing, langsung error
-      transform: true, // auto transform payload ke instance DTO
+      whitelist: true, // delete property not in DTO
+      forbidNonWhitelisted: true, // if any property not in DTO, throw error
+      transform: true, // transform data to DTO
     }),
   );
 
@@ -34,7 +35,7 @@ async function bootstrap() {
     .setTitle('CURVEBALL API')
     .setDescription('The Curveball API description')
     .setVersion('1.0')
-    .addBearerAuth() // Untuk JWT bearer auth
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

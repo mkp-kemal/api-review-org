@@ -32,7 +32,7 @@ export class TeamService {
         if (cached) {
             return JSON.parse(cached);
         }
-        
+
         return this.prisma.team.findMany({
             select: {
                 id: true,
@@ -87,8 +87,8 @@ export class TeamService {
                 state: true,
                 status: true,
                 claimedById: true,
-                subscription:{
-                    select:{
+                subscription: {
+                    select: {
                         plan: true
                     }
                 },
@@ -158,7 +158,7 @@ export class TeamService {
 
         if (!team) return null;
 
-        // Hitung akumulasi rating
+        // Acumulation
         const reviews = team.reviews ?? [];
         if (reviews.length > 0) {
             const sum = {
@@ -295,6 +295,10 @@ export class TeamService {
 
     async update(id: string, data: any, userId: string) {
 
+        if ('organizationId' in data || 'organization' in data) {
+            throw new ForbiddenException('Updating organization from this endpoint is not allowed');
+        }
+
         if (data.status === 'REJECTED' && !data.rejectedReason) {
             throw new BadRequestException('Reject reason is required');
         }
@@ -341,16 +345,16 @@ export class TeamService {
         const seenNames = new Set<string>();
         const skipped: string[] = [];
 
-        // ✅ Step 1: Validasi semua row sebelum transaksi
+        
         const teamsToCreate: { row: any; user: any | null }[] = [];
 
         for (const row of data) {
-            // Required fields (email tidak masuk)
+            
             if (!row.name || !row.ageLevel || !row.division || !row.state || !row.city) {
                 throw new BadRequestException(`Missing required fields: ${JSON.stringify(row)}`);
             }
 
-            // Cek duplikat di CSV
+            
             if (seenNames.has(row.name)) {
                 skipped.push(row.name);
                 continue;
@@ -359,21 +363,40 @@ export class TeamService {
 
             let user: any | null = null;
 
-            // ✅ Kalau ada email, cek user exist + verified
             if (row.email) {
                 user = await this.prisma.user.findUnique({
                     where: { email: row.email },
                 });
 
+                if (user.role === Role.SITE_ADMIN) {
+                    throw new BadRequestException(`User with email ${row.email} is already a site admin`);
+                }
+
+                if (user.role === Role.ORG_ADMIN) {
+                    throw new BadRequestException(`User with email ${row.email} is already an org admin`);
+                }
+
                 if (!user) {
                     throw new BadRequestException(`User with email ${row.email} not found`);
                 }
+
                 if (!user.isVerified) {
                     throw new BadRequestException(`User with email ${row.email} is not verified`);
                 }
+
+                if (user.isBanned) {
+                    throw new BadRequestException(`User with email ${row.email} is banned`);
+                }
+
+                if (user.role !== Role.REVIEWER) {
+                    await this.prisma.user.update({
+                        where: { id: user.id },
+                        data: { role: Role.TEAM_ADMIN },
+                    });
+                }
             }
 
-            // Cek duplikat di DB
+            
             const existing = await this.prisma.team.findFirst({
                 where: { name: row.name, organizationId },
             });
@@ -385,7 +408,7 @@ export class TeamService {
             teamsToCreate.push({ row, user });
         }
 
-        // ✅ Step 2: Jalankan transaksi atomic
+        
         const createdTeams = await this.prisma.$transaction(
             teamsToCreate.map(({ row, user }) =>
                 this.prisma.team.create({
@@ -397,7 +420,7 @@ export class TeamService {
                         city: row.city,
                         organizationId,
                         status: 'PENDING',
-                        claimedById: user ? user.id : null, // ✅ kalau ada email → pakai ID user, kalau tidak → null
+                        claimedById: user ? user.id : null, 
                         subscription: {
                             create: {
                                 plan: SubscriptionPlan.BASIC,
@@ -406,14 +429,6 @@ export class TeamService {
                                 stripeSubId: 'default',
                             },
                         },
-                        // roles: user
-                        //   ? {
-                        //       create: {
-                        //         userId: user.id,
-                        //         role: 'TEAM_ADMIN',
-                        //       },
-                        //     }
-                        //   : undefined, // ✅ roles hanya dibuat kalau ada user
                     },
                     include: { subscription: true },
                 })
@@ -534,7 +549,7 @@ export class TeamService {
             throw new NotFoundException(`User with email ${email} not found`);
         }
 
-        // Role tidak boleh claim
+        
         if (user.role === 'ORG_ADMIN' || user.role === 'SITE_ADMIN') {
             throw new ForbiddenException(
                 `User cannot claim a team`,
@@ -547,7 +562,7 @@ export class TeamService {
             );
         }
 
-        // check if team exists
+        
         const team = await this.prisma.team.findUnique({
             where: { id: teamId },
         });
@@ -556,7 +571,7 @@ export class TeamService {
             throw new NotFoundException(`Team with id ${teamId} not found`);
         }
 
-        // check if team is already claimed
+        
         if (team.claimedById) {
             throw new ForbiddenException(
                 `Team is already claimed by another user`,
@@ -565,7 +580,7 @@ export class TeamService {
 
         totalClaims = user.teamClaims.length + 1;
 
-        // Update team claimById
+        
         const updateTeam = await this.prisma.team.update({
             where: { id: teamId },
             data: {
@@ -573,14 +588,14 @@ export class TeamService {
             },
         });
 
-        // if user role is REVIEWER, change role to TEAM_ADMIN
+        
         if (user.role === Role.REVIEWER) {
             await this.prisma.user.update({
                 where: { id: user.id },
                 data: { role: Role.TEAM_ADMIN },
             });
 
-            // Audit log
+            
             await this.prisma.auditLog.create({
                 data: {
                     actor: {
@@ -635,11 +650,11 @@ export class TeamService {
                 const ext = extname(file.originalname);
                 const filename = `team-${uniqueSuffix}${ext}`;
 
-                // make to root folder
+                
                 const uploadDir = join(process.cwd(), 'public', 'team-photos');
                 const filePath = join(uploadDir, filename);
 
-                // make folder
+                
                 await fs.mkdir(uploadDir, { recursive: true });
 
                 await fs.writeFile(filePath, file.buffer);
@@ -647,7 +662,7 @@ export class TeamService {
                 return this.prisma.teamPhoto.create({
                     data: {
                         teamId,
-                        filename: `/team-photos/${filename}`, // you can change with domain
+                        filename: `/team-photos/${filename}`, 
                     },
                 });
             }),
@@ -679,7 +694,7 @@ export class TeamService {
         }
 
         const isUnder1MB = files.every((file) => {
-            return file.size < 2e6; // 2MB
+            return file.size < 2e6; 
         });
 
         if (!isUnder1MB) {
@@ -737,7 +752,7 @@ export class TeamService {
         }
 
         const isUnder1MB = files.every((file) => {
-            return file.size < 2e6; // 2MB
+            return file.size < 2e6; 
         });
 
         if (!isUnder1MB) {
