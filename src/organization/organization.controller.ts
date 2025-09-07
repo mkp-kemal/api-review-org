@@ -231,8 +231,9 @@ export class OrganizationController {
   }
 
   @AuditLog('CREATE', 'ORGANIZATION_CSV')
-  @Post('upload-csv')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   @UseInterceptors(FileInterceptor('file'))
+  @Post('upload-csv')
   async uploadCsv(@UploadedFile() file: MulterFile) {
     const results: any[] = [];
 
