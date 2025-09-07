@@ -63,7 +63,7 @@ export class AdminService {
         user: true,
         team: {
           include: {
-            organization: true  // Include organization data
+            organization: true  
           }
         }
       }
@@ -75,7 +75,7 @@ export class AdminService {
         { id: 'title', title: 'Title' },
         { id: 'body', title: 'Content' },
         { id: 'userEmail', title: 'User Email' },
-        { id: 'organizationName', title: 'Organization' },  // Changed from teamName
+        { id: 'organizationName', title: 'Organization' },  
         { id: 'teamDivision', title: 'Team Division' },
         { id: 'createdAt', title: 'Date' }
       ]
@@ -86,8 +86,8 @@ export class AdminService {
       title: review.title,
       body: review.body,
       userEmail: review.user.email,
-      organizationName: review.team.organization.name,  // Access organization name
-      teamDivision: `${review.team.ageLevel} ${review.team.division}`, // Example format
+      organizationName: review.team.organization.name,  
+      teamDivision: `${review.team.ageLevel} ${review.team.division}`, 
       createdAt: review.createdAt.toISOString()
     }));
 

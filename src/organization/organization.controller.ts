@@ -61,7 +61,7 @@ export class OrganizationController {
     enum: OrgStatus,
     required: true,
   })
-  // @AuditLog('READ', 'ORGANIZATION')
+  
   @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN]))
   @Get()
   async listOrgs(
@@ -222,7 +222,7 @@ export class OrganizationController {
     return this.orgService.delete(id);
   }
 
-  // @UseGuards(OptionalJwtAuthGuard)
+  
   @Get('with/teams')
   async listTeamsAndOrganizations(
     @Query('search') search?: string
@@ -231,8 +231,9 @@ export class OrganizationController {
   }
 
   @AuditLog('CREATE', 'ORGANIZATION_CSV')
-  @Post('upload-csv')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
   @UseInterceptors(FileInterceptor('file'))
+  @Post('upload-csv')
   async uploadCsv(@UploadedFile() file: MulterFile) {
     const results: any[] = [];
 

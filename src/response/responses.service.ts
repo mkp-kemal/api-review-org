@@ -29,13 +29,15 @@ export class ResponsesService {
     });
     if (!organization) throw new NotFoundException(ErrorCode.ORGANIZATION_NOT_FOUND);
 
-    // Tentukan plan efektif
+    
     const teamPlan = review.team.subscription?.plan;
     const orgPlan = organization.subscription?.plan;
 
     const effectivePlan = teamPlan || orgPlan;
 
-    if (!['PRO', 'ELITE'].includes(effectivePlan)) {
+    const isSiteAdmin = user.role?.includes('SITE_ADMIN');
+
+    if (!isSiteAdmin && !['PRO', 'ELITE'].includes(effectivePlan)) {
       throw new ForbiddenException(ErrorCode.PLAN_NOT_SUPPORTED);
     }
 
@@ -53,7 +55,7 @@ export class ResponsesService {
     userId: string,
     dto: UpdateResponseDto
   ) {
-    // 1. get response
+    
     const response = await this.prisma.orgResponse.findUnique({
       where: { id },
       include: {
@@ -67,23 +69,23 @@ export class ResponsesService {
 
     if (!response) throw new NotFoundException(ErrorCode.RESPONSE_NOT_FOUND);
 
-    // 2. get user
+    
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException(ErrorCode.USER_NOT_FOUND);
 
-    // 3. get organization
+    
     const organization = await this.prisma.organization.findUnique({
       where: { id: response.review.team.organizationId },
       include: { subscription: true }
     });
     if (!organization) throw new NotFoundException(ErrorCode.ORGANIZATION_NOT_FOUND);
 
-    // 4. Determine the effective plan (team > org)
+    
     const teamPlan = response.review.team.subscription?.plan;
     const orgPlan = organization.subscription?.plan;
     const effectivePlan = teamPlan || orgPlan;
 
-    // 5. determine if plan is supported
+    
     if (!['PRO', 'ELITE'].includes(effectivePlan)) {
       throw new ForbiddenException(ErrorCode.PLAN_NOT_SUPPORTED);
     }

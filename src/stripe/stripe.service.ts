@@ -22,12 +22,12 @@ export class StripeService {
         throw new Error('Payment method already attached to another customer');
       }
 
-      // Attach jika belum terattach
+      // Attach if not already attached
       if (!paymentMethod.customer) {
         await this.stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
       }
 
-      // Set sebagai default payment method
+      // Set as default
       await this.stripe.customers.update(customerId, {
         invoice_settings: { default_payment_method: paymentMethodId },
       });
@@ -131,7 +131,7 @@ export class StripeService {
 
     return {
       email: session.customer_details?.email || null,
-      targetName: team?.name || organization?.name || null, // nama team/org
+      targetName: team?.name || organization?.name || null,
       amount_total: session.amount_total,
       method, // format: VISA •••• 4242 (exp 12/2034)
       currency: session.currency,

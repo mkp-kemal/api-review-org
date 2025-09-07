@@ -213,7 +213,6 @@ export class BillingService {
       throw new BadRequestException(ErrorCode.INVALID_PLAN_OR_STRIPE_PRICE);
     }
 
-    // validate target entity
     let targetType: 'team' | 'organization' | null = null;
     let targetId: string | null = null;
 
@@ -243,7 +242,6 @@ export class BillingService {
       throw new BadRequestException(ErrorCode.SOMETHING_WENT_WRONG);
     }
 
-    // createt Stripe checkout session
     const session = await this.stripeService.stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -318,21 +316,18 @@ export class BillingService {
         }
 
         if (orgId) {
-          // Upsert subscription for organization
           await this.prisma.subscription.upsert({
             where: { organizationId: orgId },
             update: { plan: newPlan },
             create: { organizationId: orgId, plan: newPlan, status: "ACTIVE" },
           });
 
-          // Update all team subscriptions under this org
           await this.prisma.subscription.updateMany({
             where: { team: { organizationId: orgId } },
             data: { plan: newPlan },
           });
 
         } else if (teamId) {
-          // Upsert subscription for team
           await this.prisma.subscription.upsert({
             where: { teamId },
             update: { plan: newPlan },
@@ -342,7 +337,6 @@ export class BillingService {
           console.error("❌ Webhook Error: no organizationId or teamId in metadata");
         }
 
-        // Customer email sync
         if (!invoice.customer_email && invoice.customer) {
           try {
             const customer = await this.stripe.customers.retrieve(invoice.customer as string) as Stripe.Customer;

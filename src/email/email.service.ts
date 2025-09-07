@@ -13,7 +13,6 @@ export class EmailService {
     }
 
     async sendVerificationEmail(email: string, token: string) {
-        // const verifyUrl = `${this.config.get('APP_URL')}/auth/verify-email?token=${token}`;
         const verifyUrl = `${this.config.get('APP_URL')}/email_ver.html?token=${token}`;
         const msg = {
             to: email,

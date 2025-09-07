@@ -14,6 +14,8 @@ import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 import { CreateResponseDto } from 'src/auth/dto/create-response.dto';
 import { UpdateResponseDto } from 'src/auth/dto/update-response.dto';
 import { AuditLog } from 'src/audit/audit-log.decorator';
+import { RoleGuard } from 'src/auth/strategies/role-guard';
+import { Role } from '@prisma/client';
 
 @ApiTags('Organization Responses')
 @ApiBearerAuth()
@@ -22,7 +24,7 @@ export class ResponsesController {
     constructor(private readonly responsesService: ResponsesService) { }
 
     @AuditLog('CREATE', 'RESPOND')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
     @Post('reviews/:id/respond')
     async createResponse(
         @Param('id') reviewId: string,
@@ -34,7 +36,7 @@ export class ResponsesController {
 
     @ApiBody({ type: UpdateResponseDto })
     @AuditLog('UPDATE', 'RESPOND')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
     @Patch('respond/:id')
     async updateResponse(
         @Param('id') id: string,

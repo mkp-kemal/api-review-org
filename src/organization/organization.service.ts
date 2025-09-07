@@ -186,7 +186,7 @@ export class OrganizationService {
     const org = await this.findById(orgId);
     if (org.claimedById) throw new BadRequestException('Organization already claimed');
 
-    // Cek domain email user cocok dengan org claim email domain
+    
     if (!emailDomain || !org.website?.includes(emailDomain)) {
       throw new BadRequestException('Email domain does not match organization domain');
     }
@@ -224,7 +224,7 @@ export class OrganizationService {
       newStatus = 'APPROVED';
 
       await this.prisma.organization.update({
-        where: {id: orgId},
+        where: { id: orgId },
         data: {
           rejectedReason: null
         }
@@ -267,9 +267,9 @@ export class OrganizationService {
     const teams = await this.prisma.team.findMany({
       where: {
         AND: [
-          { status: 'APPROVED' }, // Hanya team yang approved
+          { status: 'APPROVED' }, 
           {
-            organization: { status: 'APPROVED' } // Hanya organization yang approved
+            organization: { status: 'APPROVED' } 
           },
           {
             OR: [
@@ -284,11 +284,11 @@ export class OrganizationService {
         ]
       },
       include: {
-        organization: true // Menambahkan relasi organization
+        organization: true 
       }
     });
 
-    // Format response sesuai kebutuhan
+    
     const result = teams.map(team => ({
       id: team.id,
       name: team.name,
@@ -316,6 +316,37 @@ export class OrganizationService {
         continue;
       }
 
+      let user: any | null = null;
+
+      if (row.email) {
+        user = await this.prisma.user.findUnique({
+          where: { email: row.email },
+        });
+
+        if (user.role === Role.SITE_ADMIN) {
+          throw new BadRequestException(`User with email ${row.email} is already a site admin`);
+        }
+
+        if (!user) {
+          throw new BadRequestException(`User with email ${row.email} not found`);
+        }
+
+        if (!user.isVerified) {
+          throw new BadRequestException(`User with email ${row.email} is not verified`);
+        }
+
+        if (user.isBanned) {
+          throw new BadRequestException(`User with email ${row.email} is banned`);
+        }
+
+        if (user.role !== Role.ORG_ADMIN) {
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: { role: Role.ORG_ADMIN },
+          });
+        }
+      }
+
       const org = await this.prisma.organization.create({
         data: {
           name: row.name,
@@ -323,6 +354,7 @@ export class OrganizationService {
           city: row.city,
           website: row.website,
           status: 'PENDING',
+          claimedById: user ? user.id : null,
           subscription: {
             create: {
               plan: SubscriptionPlan.BASIC,

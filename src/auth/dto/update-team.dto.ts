@@ -8,4 +8,8 @@ export class UpdateTeamDto extends PartialType(TeamDto) {
     @IsOptional()
     @IsEnum(OrgStatus)
     status: OrgStatus;
+
+    @IsString()
+    @IsOptional()
+    rejectedReason?: string;
 }

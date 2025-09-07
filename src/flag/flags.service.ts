@@ -1,4 +1,3 @@
-// flags.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { FlagStatus, Role } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';

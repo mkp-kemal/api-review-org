@@ -1,4 +1,3 @@
-// flags.controller.ts
 import { Controller, Post, Param, Body, Get, Patch, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { FlagsService } from './flags.service';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
@@ -24,7 +23,7 @@ export class FlagsController {
 
         if (!userId) throw new BadRequestException('userId is required');
 
-        // ambil IP (pakai x-forwarded-for kalau ada proxy, fallback ke remoteAddress)
+        // get IP (with x-forwarded-for if via proxy, fallback to remoteAddress)
         const ip =
             (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
             req.socket.remoteAddress;
