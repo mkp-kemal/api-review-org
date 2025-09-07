@@ -87,6 +87,11 @@ export class TeamService {
                 state: true,
                 status: true,
                 claimedById: true,
+                subscription:{
+                    select:{
+                        plan: true
+                    }
+                },
                 teamPhoto: {
                     select: {
                         filename: true
