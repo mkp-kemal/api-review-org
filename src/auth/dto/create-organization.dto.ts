@@ -1,4 +1,4 @@
-import { IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class OrganizationDto {
@@ -20,5 +20,6 @@ export class OrganizationDto {
 
   @ApiProperty({ example: 'user-123', required: false, description: 'User ID yang mengklaim organisasi (opsional)' })
   @IsString()
+  @IsOptional()
   claimedById?: string;
 }
