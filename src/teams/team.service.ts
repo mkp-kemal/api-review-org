@@ -765,8 +765,6 @@ export class TeamService {
             return this.uploadTeamPhotosAws(teamId, files);
         }
     }
-<<<<<<< HEAD
-=======
 
     async deleteTeamPhotosAws(photoId: string) {
         const photo = await this.prisma.teamPhoto.findUnique({ where: { id: photoId } });
@@ -836,5 +834,4 @@ export class TeamService {
         await this.prisma.teamPhoto.deleteMany({ where: { teamId } });
     }
 
->>>>>>> e8ed133b9dc4fd3433d75c4736f949e31367b097
 }
