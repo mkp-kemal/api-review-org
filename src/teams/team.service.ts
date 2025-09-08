@@ -707,7 +707,6 @@ export class TeamService {
                 const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
                 const ext = extname(file.originalname);
                 const fileKey = `team-${uniqueSuffix}${ext}`;
-
                 const command = new PutObjectCommand({
                     Bucket: this.bucketName,
                     Key: fileKey,
