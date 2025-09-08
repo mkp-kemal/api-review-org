@@ -94,6 +94,7 @@ export class TeamService {
                 },
                 teamPhoto: {
                     select: {
+                        id: true,
                         filename: true
                     }
                 },
@@ -345,16 +346,16 @@ export class TeamService {
         const seenNames = new Set<string>();
         const skipped: string[] = [];
 
-        
+
         const teamsToCreate: { row: any; user: any | null }[] = [];
 
         for (const row of data) {
-            
+
             if (!row.name || !row.ageLevel || !row.division || !row.state || !row.city) {
                 throw new BadRequestException(`Missing required fields: ${JSON.stringify(row)}`);
             }
 
-            
+
             if (seenNames.has(row.name)) {
                 skipped.push(row.name);
                 continue;
@@ -396,7 +397,7 @@ export class TeamService {
                 }
             }
 
-            
+
             const existing = await this.prisma.team.findFirst({
                 where: { name: row.name, organizationId },
             });
@@ -408,7 +409,7 @@ export class TeamService {
             teamsToCreate.push({ row, user });
         }
 
-        
+
         const createdTeams = await this.prisma.$transaction(
             teamsToCreate.map(({ row, user }) =>
                 this.prisma.team.create({
@@ -420,7 +421,7 @@ export class TeamService {
                         city: row.city,
                         organizationId,
                         status: 'PENDING',
-                        claimedById: user ? user.id : null, 
+                        claimedById: user ? user.id : null,
                         subscription: {
                             create: {
                                 plan: SubscriptionPlan.BASIC,
@@ -549,7 +550,7 @@ export class TeamService {
             throw new NotFoundException(`User with email ${email} not found`);
         }
 
-        
+
         if (user.role === 'ORG_ADMIN' || user.role === 'SITE_ADMIN') {
             throw new ForbiddenException(
                 `User cannot claim a team`,
@@ -562,7 +563,7 @@ export class TeamService {
             );
         }
 
-        
+
         const team = await this.prisma.team.findUnique({
             where: { id: teamId },
         });
@@ -571,7 +572,7 @@ export class TeamService {
             throw new NotFoundException(`Team with id ${teamId} not found`);
         }
 
-        
+
         if (team.claimedById) {
             throw new ForbiddenException(
                 `Team is already claimed by another user`,
@@ -580,7 +581,7 @@ export class TeamService {
 
         totalClaims = user.teamClaims.length + 1;
 
-        
+
         const updateTeam = await this.prisma.team.update({
             where: { id: teamId },
             data: {
@@ -588,14 +589,14 @@ export class TeamService {
             },
         });
 
-        
+
         if (user.role === Role.REVIEWER) {
             await this.prisma.user.update({
                 where: { id: user.id },
                 data: { role: Role.TEAM_ADMIN },
             });
 
-            
+
             await this.prisma.auditLog.create({
                 data: {
                     actor: {
@@ -650,11 +651,11 @@ export class TeamService {
                 const ext = extname(file.originalname);
                 const filename = `team-${uniqueSuffix}${ext}`;
 
-                
+
                 const uploadDir = join(process.cwd(), 'public', 'team-photos');
                 const filePath = join(uploadDir, filename);
 
-                
+
                 await fs.mkdir(uploadDir, { recursive: true });
 
                 await fs.writeFile(filePath, file.buffer);
@@ -662,7 +663,7 @@ export class TeamService {
                 return this.prisma.teamPhoto.create({
                     data: {
                         teamId,
-                        filename: `/team-photos/${filename}`, 
+                        filename: `/team-photos/${filename}`,
                     },
                 });
             }),
@@ -694,7 +695,7 @@ export class TeamService {
         }
 
         const isUnder1MB = files.every((file) => {
-            return file.size < 2e6; 
+            return file.size < 2e6;
         });
 
         if (!isUnder1MB) {
@@ -752,7 +753,7 @@ export class TeamService {
         }
 
         const isUnder1MB = files.every((file) => {
-            return file.size < 2e6; 
+            return file.size < 2e6;
         });
 
         if (!isUnder1MB) {
@@ -765,4 +766,76 @@ export class TeamService {
             return this.uploadTeamPhotosAws(teamId, files);
         }
     }
+<<<<<<< HEAD
+=======
+
+    async deleteTeamPhotosAws(photoId: string) {
+        const photo = await this.prisma.teamPhoto.findUnique({ where: { id: photoId } });
+
+        if (!photo) {
+            throw new BadRequestException("Photo not found");
+        }
+
+        const url = new URL(photo.filename);
+        const fileKey = url.pathname.replace(/^\//, '');
+
+        try {
+            await this.s3.send(
+                new DeleteObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: fileKey,
+                }),
+            );
+
+            await this.prisma.teamPhoto.delete({
+                where: { id: photoId },
+            });
+        } catch (error) {
+            if (error instanceof Error) {
+                throw new InternalServerErrorException(error.message);
+            }
+            throw error;
+        }
+
+        return {
+            message: 'Photo deleted successfully',
+            deletedId: photoId,
+        };
+
+    }
+
+    async resetTeamPhotosAws(teamId: string) {
+        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+        if (!team) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
+        }
+
+        if (team.status != OrgStatus.APPROVED) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
+        }
+
+        const photos = await this.prisma.teamPhoto.findMany({ where: { teamId } });
+        for (const photo of photos) {
+            const url = new URL(photo.filename);
+            const fileKey = url.pathname.replace(/^\//, '');
+
+            try {
+                await this.s3.send(
+                    new DeleteObjectCommand({
+                        Bucket: this.bucketName,
+                        Key: fileKey,
+                    }),
+                );
+            } catch (error) {
+                if (error instanceof Error) {
+                    throw new InternalServerErrorException(error.message);
+                }
+                throw error;
+            }
+        }
+
+        await this.prisma.teamPhoto.deleteMany({ where: { teamId } });
+    }
+
+>>>>>>> e8ed133b9dc4fd3433d75c4736f949e31367b097
 }
