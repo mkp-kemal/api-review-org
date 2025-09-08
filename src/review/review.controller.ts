@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, UseGuards, Req, Get, Query, Put, BadRequestException, Patch } from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards, Req, Get, Query, Put, BadRequestException, Patch, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { ReviewService } from './review.service';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
@@ -121,5 +121,11 @@ export class ReviewController {
       @Get('reviews/access/claim')
       async getOrganizationWithAccess(@Req() req, @Query('sort') sort: 'recent' | 'rating' = 'recent') {
         return this.reviewService.getReviewsWithAccess(req.user.userId, sort);
+      }
+
+      @Delete('reviews/:id')
+      @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+      async deleteReview(@Param('id') id: string) {
+        return this.reviewService.deleteReview(id);
       }
 }

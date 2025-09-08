@@ -377,4 +377,13 @@ export class ReviewService {
             orderBy: sortObj,
         });
     }
+
+    async deleteReview (id: string) {
+        const review = await this.prisma.review.findUnique({ where: { id } });
+        if (!review) {
+            throw new NotFoundException('Review not found');
+        }
+
+        return this.prisma.review.delete({ where: { id } });
+    }
 }

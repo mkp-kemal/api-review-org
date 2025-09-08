@@ -206,6 +206,20 @@ export class TeamController {
     };
   }
 
+  @AuditLog('DELETE', 'TEAM_PHOTOS_AWS')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+  @Delete('upload-photos-aws/:photoId')
+  async deleteTeamPhotosAws(@Param('photoId') photoId: string) {
+    return this.teamService.deleteTeamPhotosAws(photoId);
+  }
+
+  @AuditLog('DELETE', 'TEAM_PHOTOS_AWS_RESET')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+  @Delete('reset-photos-aws/:teamId')
+  async resetTeamPhotosAws(@Param('teamId') teamId: string) {
+    return this.teamService.resetTeamPhotosAws(teamId);
+  }
+
   @ApiParam({
     name: 'typeSystemUpload',
     enum: TypeSystemUpload,
