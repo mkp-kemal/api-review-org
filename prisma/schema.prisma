@@ -17,6 +17,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   isBanned     Boolean  @default(false)
+  isDeleted    Boolean  @default(false)
 
   submittedOrgs Organization[] @relation("OrgSubmittedBy")
   approvedOrgs  Organization[] @relation("OrgApprovedBy")
@@ -80,7 +81,6 @@ model Organization {
   teams       Team[]
   roles       UserOrgRole[]
 
-  
   subscription Subscription?
 }
 
@@ -108,15 +108,14 @@ model Team {
   roles        UserTeamRole[]
   teamPhoto    TeamPhoto[]
 
-  
   subscription Subscription?
 }
 
 model Subscription {
   id               String             @id @default(cuid())
-  organizationId   String?            @unique 
-  teamId           String?            @unique 
-  plan             SubscriptionPlan   @default(BASIC) 
+  organizationId   String?            @unique
+  teamId           String?            @unique
+  plan             SubscriptionPlan   @default(BASIC)
   status           SubscriptionStatus @default(ACTIVE)
   stripeCustomerId String?
   stripeSubId      String?
@@ -170,7 +169,7 @@ model Flag {
   reporter       User       @relation("FlagReporter", fields: [reporterUserId], references: [id])
   review         Review     @relation(fields: [reviewId], references: [id])
 
-  @@unique([reviewId, reporterUserId]) 
+  @@unique([reviewId, reporterUserId])
   @@unique([reviewId, ip])
 }
 
@@ -210,7 +209,7 @@ model RefreshToken {
 model TeamPhoto {
   id        String   @id @default(cuid())
   teamId    String
-  filename  String 
+  filename  String
   createdAt DateTime @default(now())
 
   team Team @relation(fields: [teamId], references: [id])

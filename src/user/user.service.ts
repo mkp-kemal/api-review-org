@@ -35,6 +35,24 @@ export class UserService {
       data: { isBanned: status === 'ban' },
       select: { id: true, email: true, role: true, isVerified: true, isBanned: true, createdAt: true },
     });
+  }
 
+  async deleteMe(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    })
+
+    if (user.isDeleted) {
+      throw new NotFoundException(ErrorCode.USER_NOT_FOUND);
+    }
+
+    await this.prisma.user.update({
+      where: { id },
+      data: { isDeleted: true },
+    })
+
+    return {
+      message: `User ${user.email} deleted successfully`,
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards, Req, Patch, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Req, Patch, BadRequestException, Delete } from '@nestjs/common';
 import { UserService } from './user.service';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 import { AuditLog } from 'src/audit/audit-log.decorator';
@@ -74,5 +74,11 @@ export class UserController {
         }
     
     return this.userService.ban(id, status);
+  }
+
+  @Delete('me')
+  @UseGuards(JwtAuthGuard)
+  async deleteMe(@Req() req) {
+    return this.userService.deleteMe(req.user.userId);
   }
 }

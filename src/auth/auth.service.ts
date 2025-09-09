@@ -132,6 +132,8 @@ export class AuthService {
         const user = await this.validateUser(email, password);
 
         if (!user) throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS);
+        
+        if (user.isDeleted) throw new ForbiddenException(ErrorCode.USER_NOT_FOUND);
 
         if (!user.isVerified) throw new ForbiddenException(ErrorCode.EMAIL_NOT_VERIFIED);
 
