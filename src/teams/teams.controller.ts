@@ -264,4 +264,10 @@ export class TeamController {
   async uploadTeamPhotosAwsOrLocal(@UploadedFiles() files: MulterFile[], @Body() dto: UploadFileDto, @Param('typeSystemUpload') typeSystem: TypeSystemUpload) {
     return this.teamService.uploadTeamPhotosAwsOrLocal(dto.teamId, files, typeSystem);
   }
+
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
+  @Get('files/all')
+  async getAllFilesOnTeam(@Req() req) {
+    return this.teamService.getAllFilesOnTeam(req.user.userId);
+  }
 }

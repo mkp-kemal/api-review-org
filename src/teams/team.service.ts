@@ -215,7 +215,7 @@ export class TeamService {
 
 
                 if (user.role === Role.ORG_ADMIN || user.role === Role.SITE_ADMIN) {
-                   throw new ForbiddenException(
+                    throw new ForbiddenException(
                         `User with role ${user.role} cannot claim a team`,
                     );
                 }
@@ -832,6 +832,55 @@ export class TeamService {
         }
 
         await this.prisma.teamPhoto.deleteMany({ where: { teamId } });
+    }
+
+    async getAllFilesOnTeam(userId: string) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (user.role === Role.SITE_ADMIN) {
+            return this.prisma.teamPhoto.findMany(
+                {
+                    select: {
+                        id: true,
+                        filename: true,
+                        team: {
+                            select: {
+                                id: true,
+                                name: true,
+                                organization: {
+                                    select: {
+                                        name: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+        } else {
+            return await this.prisma.teamPhoto.findMany({
+                where: {
+                    OR: [
+                        { team: { claimedById: userId } },
+                        { team: { organization: { claimedById: userId } } }
+                    ]
+                },
+                select: {
+                    id: true,
+                    filename: true,
+                    team: {
+                        select: {
+                            id: true,
+                            name: true,
+                            organization: {
+                                select: {
+                                    name: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
     }
 
 }
