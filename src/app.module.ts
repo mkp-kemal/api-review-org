@@ -5,7 +5,7 @@ import { UserModule } from './user/user.module';
 import { OrganizationModule } from './organization/organization.module';
 import { ReviewModule } from './review/review.module';
 import { EmailModule } from './email/email.module';
-import { AuthModule } from './auth/strategies/auth.module';
+import { AuthModule } from './auth/auth.module';
 import { SearchModule } from './search/search.module';
 import { FlagsModule } from './flag/flags.module';
 import { ResponsesModule } from './response/responses.module';

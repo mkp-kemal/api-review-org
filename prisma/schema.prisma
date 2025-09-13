@@ -123,6 +123,7 @@ model Subscription {
 
   organization Organization? @relation(fields: [organizationId], references: [id])
   team         Team?         @relation(fields: [teamId], references: [id])
+  sub          SubscriptionTransaction[]
 }
 
 model Review {
@@ -216,6 +217,19 @@ model TeamPhoto {
 
   @@index([teamId])
 }
+
+model SubscriptionTransaction {
+  id              String   @id @default(cuid())
+  subscriptionId  String
+  amount          Int
+  currency        String   @default("usd")
+  status          String   // e.g., "paid", "failed", "pending"
+  stripePaymentId String?  // use Stripe
+  createdAt       DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+}
+
 
 enum Role {
   REVIEWER
