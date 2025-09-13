@@ -18,7 +18,7 @@ export class BillingService {
     private configService: ConfigService
   ) {
     this.stripe = new Stripe(configService.get('STRIPE_SECRET_KEY'), {
-      apiVersion: '2025-08-27.basil', 
+      apiVersion: '2025-08-27.basil',
       typescript: true,
     });
   }
@@ -70,7 +70,7 @@ export class BillingService {
         plan,
         status: SubscriptionStatus.ACTIVE,
         stripeCustomerId: customerId,
-        stripeSubId: "-", 
+        stripeSubId: "-",
       },
     });
 
@@ -90,7 +90,7 @@ export class BillingService {
   }
 
   private async handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-    
+
     if (session.mode !== 'subscription') return;
 
     const organizationId = session.metadata?.organizationId;
@@ -285,7 +285,7 @@ export class BillingService {
       );
 
       if (event.type === 'invoice.payment_succeeded') {
-        
+
         const invoice = event.data.object as Stripe.Invoice & {
           parent?: {
             subscription_details?: {
@@ -293,7 +293,7 @@ export class BillingService {
               metadata?: Record<string, string>;
             };
           };
-          payment_intent?: string; 
+          payment_intent?: string;
         };
 
         const subscriptionId = invoice.parent?.subscription_details?.subscription;
@@ -360,12 +360,12 @@ export class BillingService {
 
           if (subscriptionRecord) {
             await tx.subscriptionTransaction.create({
-              data: { 
+              data: {
                 subscriptionId: subscriptionRecord.id,
                 amount: invoice.total,
                 currency: invoice.currency,
                 status: 'paid',
-                stripePaymentId: invoice.payment_intent || invoice.id, 
+                stripePaymentId: (invoice.payment_intent as string) || null, // <-- JANGAN fallback ke invoice.id!
               },
             });
           }
@@ -380,21 +380,70 @@ export class BillingService {
     }
   }
 
-  async getAllSubscriptionTransactions() {
-    return this.prisma.subscriptionTransaction.findMany({
-      include: {
-        subscription: {
-          include: {
-            organization: true,
-            team: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-  }
+ async getAllSubscriptionTransactions() {
+  const transactions = await this.prisma.subscriptionTransaction.findMany({
+    include: {
+      subscription: { include: { organization: true, team: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const customerIds = [
+    ...new Set(transactions.map(t => t.subscription?.stripeCustomerId).filter(Boolean)),
+  ];
+
+  // Ambil semua customers
+  const customers = await Promise.all(
+    customerIds.map(id =>
+      this.stripe.customers.retrieve(id).catch(err => {
+        console.warn(`⚠️ Failed to retrieve customer ${id}:`, err.message);
+        return null;
+      })
+    )
+  );
+  const customerMap = new Map(customerIds.map((id, i) => [id, customers[i]]));
+
+  // Ambil invoices
+  const invoiceMap = new Map<string, Stripe.Invoice>();
+  await Promise.all(
+    transactions.map(async tx => {
+      const id = tx.stripePaymentId;
+      if (!id || !id.startsWith('in_')) return;
+
+      try {
+        const invoice = await this.stripe.invoices.retrieve(
+          id
+        ) as Stripe.Invoice;
+        invoiceMap.set(id, invoice);
+      } catch (err: any) {
+        console.warn(`⚠️ Failed to retrieve invoice ${id}:`, err.message);
+      }
+    })
+  );
+
+  // Gabungkan data
+  return transactions.map(tx => {
+    const customer = tx.subscription?.stripeCustomerId
+      ? customerMap.get(tx.subscription.stripeCustomerId)
+      : null;
+
+    const invoice = tx.stripePaymentId
+      ? invoiceMap.get(tx.stripePaymentId)
+      : null;
+
+    // Ambil tipe payment method dari invoice
+    const paymentMethods = invoice?.payment_settings?.payment_method_types ?? [];
+
+    return {
+      ...tx,
+      customer,
+      paymentMethods,
+      invoice_pdf: invoice?.invoice_pdf ?? null,
+      hosted_invoice_url: invoice?.hosted_invoice_url ?? null,
+    };
+  });
+}
+
 
 
 
