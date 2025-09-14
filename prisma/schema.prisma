@@ -109,6 +109,7 @@ model Team {
   teamPhoto    TeamPhoto[]
 
   subscription Subscription?
+  tryOuts      TryOuts[]
 }
 
 model Subscription {
@@ -121,8 +122,9 @@ model Subscription {
   stripeSubId      String?
   createdAt        DateTime           @default(now())
 
-  organization Organization? @relation(fields: [organizationId], references: [id])
-  team         Team?         @relation(fields: [teamId], references: [id])
+  organization Organization?             @relation(fields: [organizationId], references: [id])
+  team         Team?                     @relation(fields: [teamId], references: [id])
+  sub          SubscriptionTransaction[]
 }
 
 model Review {
@@ -215,6 +217,31 @@ model TeamPhoto {
   team Team @relation(fields: [teamId], references: [id])
 
   @@index([teamId])
+}
+
+model SubscriptionTransaction {
+  id              String   @id @default(cuid())
+  subscriptionId  String
+  amount          Int
+  currency        String   @default("usd")
+  status          String
+  stripePaymentId String?
+  createdAt       DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+}
+
+model TryOuts {
+  id          String   @id @default(cuid())
+  title       String
+  datetime    DateTime
+  location    String
+  urlregister String?
+  teamId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  team Team? @relation(fields: [teamId], references: [id])
 }
 
 enum Role {

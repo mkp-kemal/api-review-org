@@ -56,4 +56,9 @@ export class BillingController {
     const session = await this.stripeService.attachSubscriptionToDb(sessionId);
     return session;
   }
+
+  @Get('transactions')
+  async getTransactions() {
+    return this.billingService.getAllSubscriptionTransactions();
+  }
 }

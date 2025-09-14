@@ -8,7 +8,7 @@ export class StripeService {
   public readonly stripe: Stripe;
   constructor(private configService: ConfigService, private prisma: PrismaService) {
     this.stripe = new Stripe(configService.get('STRIPE_SECRET_KEY'), {
-      apiVersion: '2025-07-30.basil', // Latest stable version
+      apiVersion: '2025-08-27.basil', // Latest stable version
       typescript: true,
     });
   }

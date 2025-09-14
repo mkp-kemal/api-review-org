@@ -18,7 +18,7 @@ export class BillingService {
     private configService: ConfigService
   ) {
     this.stripe = new Stripe(configService.get('STRIPE_SECRET_KEY'), {
-      apiVersion: '2025-07-30.basil', // Latest stable version
+      apiVersion: '2025-08-27.basil',
       typescript: true,
     });
   }
@@ -70,7 +70,7 @@ export class BillingService {
         plan,
         status: SubscriptionStatus.ACTIVE,
         stripeCustomerId: customerId,
-        stripeSubId: "-", // from stripe
+        stripeSubId: "-",
       },
     });
 
@@ -90,7 +90,7 @@ export class BillingService {
   }
 
   private async handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-    // must be mode subscription
+
     if (session.mode !== 'subscription') return;
 
     const organizationId = session.metadata?.organizationId;
@@ -115,8 +115,6 @@ export class BillingService {
 
     this.logger.log(`Subscription created for org ${organizationId}`);
   }
-
-
 
   async handleStripeWebhook(rawBody: Buffer | string, signature: string) {
     const event = this.stripeService.constructWebhookEvent(rawBody, signature);
@@ -143,14 +141,12 @@ export class BillingService {
     }
   }
 
-
   private async handleSubscriptionCancelled(subscription: Stripe.Subscription) {
     await this.prisma.subscription.updateMany({
       where: { stripeSubId: subscription.id },
       data: { status: SubscriptionStatus.CANCELED },
     });
   }
-
 
   private async handlePaymentFailed(invoice: Stripe.Invoice) {
     const subscriptionId = invoice.lines?.data?.[0]?.subscription as string;
@@ -161,7 +157,6 @@ export class BillingService {
       data: { status: SubscriptionStatus.PAST_DUE },
     });
   }
-
 
   private async handlePaymentSucceeded(invoice: Stripe.Invoice) {
     const subscriptionId = invoice.lines?.data?.[0]?.subscription as string;
@@ -187,6 +182,7 @@ export class BillingService {
       subscription: organization.subscription || null,
     };
   }
+
   private getPriceIdForPlan(plan: SubscriptionPlan): string {
     switch (plan) {
       case SubscriptionPlan.PRO:
@@ -289,70 +285,92 @@ export class BillingService {
       );
 
       if (event.type === 'invoice.payment_succeeded') {
+
         const invoice = event.data.object as Stripe.Invoice & {
           parent?: {
             subscription_details?: {
-              subscription?: string
-              metadata?: Record<string, string>
-            }
-          }
+              subscription?: string;
+              metadata?: Record<string, string>;
+            };
+          };
+          payment_intent?: string;
         };
 
         const subscriptionId = invoice.parent?.subscription_details?.subscription;
 
         if (!subscriptionId) {
-          console.error("❌ No subscription ID on invoice", invoice.id);
+          console.error("❌ No subscription ID found in invoice.parent.subscription_details", invoice.id);
           return res.status(400).send("Missing subscription ID");
         }
 
         const subscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+
         const newPlan = subscription.metadata.plan as SubscriptionPlan;
         const orgId = subscription.metadata.organizationId;
         const teamId = subscription.metadata.teamId;
 
         if (!newPlan) {
-          console.error("❌ Webhook Error: missing plan in metadata");
+          console.error("❌ Webhook Error: missing plan in subscription metadata");
           return res.status(400).send("Missing plan in metadata");
         }
 
-        if (orgId) {
-          await this.prisma.subscription.upsert({
-            where: { organizationId: orgId },
-            update: { plan: newPlan },
-            create: { organizationId: orgId, plan: newPlan, status: "ACTIVE" },
-          });
-
-          await this.prisma.subscription.updateMany({
-            where: { team: { organizationId: orgId } },
-            data: { plan: newPlan },
-          });
-
-        } else if (teamId) {
-          await this.prisma.subscription.upsert({
-            where: { teamId },
-            update: { plan: newPlan },
-            create: { teamId, plan: newPlan, status: "ACTIVE" },
-          });
-        } else {
-          console.error("❌ Webhook Error: no organizationId or teamId in metadata");
+        if (!orgId && !teamId) {
+          console.error("❌ Webhook Error: no organizationId or teamId in subscription metadata");
+          return res.status(400).send("Missing target ID in metadata");
         }
 
-        if (!invoice.customer_email && invoice.customer) {
-          try {
-            const customer = await this.stripe.customers.retrieve(invoice.customer as string) as Stripe.Customer;
+        await this.prisma.$transaction(async (tx) => {
+          let subscriptionRecord;
 
-            if (customer.email) {
-              await this.stripe.customers.update(invoice.customer as string, {
-                email: customer.email,
-              });
-              console.log('📧 Customer email updated, Stripe will auto-send receipt');
-            }
-          } catch (error) {
-            console.error('Error handling customer email:', error);
+          if (orgId) {
+            subscriptionRecord = await tx.subscription.upsert({
+              where: { organizationId: orgId },
+              update: {
+                plan: newPlan,
+                stripeCustomerId: subscription.customer as string,
+                stripeSubId: subscriptionId,
+                status: "ACTIVE"
+              },
+              create: {
+                organizationId: orgId,
+                plan: newPlan,
+                stripeCustomerId: subscription.customer as string,
+                stripeSubId: subscriptionId,
+                status: "ACTIVE"
+              },
+            });
+          } else if (teamId) {
+            subscriptionRecord = await tx.subscription.upsert({
+              where: { teamId },
+              update: {
+                plan: newPlan,
+                stripeCustomerId: subscription.customer as string,
+                stripeSubId: subscriptionId,
+                status: "ACTIVE"
+              },
+              create: {
+                teamId,
+                plan: newPlan,
+                stripeCustomerId: subscription.customer as string,
+                stripeSubId: subscriptionId,
+                status: "ACTIVE"
+              },
+            });
           }
-        }
 
-        console.log('📧 Receipt will be auto-sent by Stripe for invoice:', invoice.id);
+          if (subscriptionRecord) {
+            await tx.subscriptionTransaction.create({
+              data: {
+                subscriptionId: subscriptionRecord.id,
+                amount: invoice.total,
+                currency: invoice.currency,
+                status: 'paid',
+                stripePaymentId: (invoice.payment_intent as string) || null, // <-- JANGAN fallback ke invoice.id!
+              },
+            });
+          }
+        });
+
       }
 
       return res.status(200).json({ received: true });
@@ -361,6 +379,73 @@ export class BillingService {
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
   }
+
+ async getAllSubscriptionTransactions() {
+  const transactions = await this.prisma.subscriptionTransaction.findMany({
+    include: {
+      subscription: { include: { organization: true, team: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const customerIds = [
+    ...new Set(transactions.map(t => t.subscription?.stripeCustomerId).filter(Boolean)),
+  ];
+
+  // Ambil semua customers
+  const customers = await Promise.all(
+    customerIds.map(id =>
+      this.stripe.customers.retrieve(id).catch(err => {
+        console.warn(`⚠️ Failed to retrieve customer ${id}:`, err.message);
+        return null;
+      })
+    )
+  );
+  const customerMap = new Map(customerIds.map((id, i) => [id, customers[i]]));
+
+  // Ambil invoices
+  const invoiceMap = new Map<string, Stripe.Invoice>();
+  await Promise.all(
+    transactions.map(async tx => {
+      const id = tx.stripePaymentId;
+      if (!id || !id.startsWith('in_')) return;
+
+      try {
+        const invoice = await this.stripe.invoices.retrieve(
+          id
+        ) as Stripe.Invoice;
+        invoiceMap.set(id, invoice);
+      } catch (err: any) {
+        console.warn(`⚠️ Failed to retrieve invoice ${id}:`, err.message);
+      }
+    })
+  );
+
+  // Gabungkan data
+  return transactions.map(tx => {
+    const customer = tx.subscription?.stripeCustomerId
+      ? customerMap.get(tx.subscription.stripeCustomerId)
+      : null;
+
+    const invoice = tx.stripePaymentId
+      ? invoiceMap.get(tx.stripePaymentId)
+      : null;
+
+    // Ambil tipe payment method dari invoice
+    const paymentMethods = invoice?.payment_settings?.payment_method_types ?? [];
+
+    return {
+      ...tx,
+      customer,
+      paymentMethods,
+      invoice_pdf: invoice?.invoice_pdf ?? null,
+      hosted_invoice_url: invoice?.hosted_invoice_url ?? null,
+    };
+  });
+}
+
+
+
 
 }
 
