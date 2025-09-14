@@ -9,6 +9,7 @@ import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client
 import { ErrorCode } from "src/common/error-code";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import Redis from "ioredis";
+import { TryoutsDto } from "src/auth/dto/tryouts.dto";
 
 @Injectable()
 export class TeamService {
@@ -153,7 +154,8 @@ export class TeamService {
                             }
                         }
                     }
-                }
+                },
+                tryOuts: true
             }
         });
 
@@ -883,4 +885,89 @@ export class TeamService {
         }
     }
 
+    async createTryOuts(teamId: string, dto: TryoutsDto) {
+        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+
+        if (!team) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
+        }
+
+        const tryout = await this.prisma.tryOuts.create({
+            data: {
+                teamId,
+                title: dto.title,
+                urlregister: dto.urlregister,
+                datetime: dto.datetime,
+                location: dto.location
+            }
+        });
+
+        return tryout;
+    }
+
+    async deleteTryout(id: string) {
+        const tryout = await this.prisma.tryOuts.findUnique({ where: { id } });
+
+        if (!tryout) {
+            throw new BadRequestException(ErrorCode.TRYOUT_NOT_FOUND);
+        }
+
+        await this.prisma.tryOuts.delete({ where: { id } });
+
+        return { message: 'Tryout deleted successfully', deletedId: id };
+    }
+
+    async getTryoutsByClaimedUser(userId: string, isAdmin: boolean) {
+        if (isAdmin) {
+            return this.prisma.tryOuts.findMany({
+                select: {
+                    id: true,
+                    title: true,
+                    datetime: true,
+                    location: true,
+                    urlregister: true,
+                    team: {
+                        select: {
+                            id: true,
+                            name: true,
+                            organization: {
+                                select: {
+                                    name: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            return this.prisma.tryOuts.findMany({
+                where: {
+                    team: {
+                        OR: [
+                            { claimedById: userId },
+                            { organization: { claimedById: userId } }
+                        ]
+                    }
+                },
+                select: {
+                    id: true,
+                    title: true,
+                    datetime: true,
+                    location: true,
+                    urlregister: true,
+                    team: {
+                        select: {
+                            id: true,
+                            name: true,
+                            organization: {
+                                select: {
+                                    name: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
 }

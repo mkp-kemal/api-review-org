@@ -18,6 +18,7 @@ import { ApiTags, ApiResponse, ApiConsumes, ApiBody, ApiParam } from "@nestjs/sw
 import { UpdateTeamDto } from "src/auth/dto/update-team.dto";
 import { UploadFileDto } from "src/auth/dto/upload-file.dto";
 import { MulterExceptionFilter } from "src/common/multer-exception.filter";
+import { TryoutsDto } from "src/auth/dto/tryouts.dto";
 
 
 @ApiTags('Teams')
@@ -269,5 +270,31 @@ export class TeamController {
   @Get('files/all')
   async getAllFilesOnTeam(@Req() req) {
     return this.teamService.getAllFilesOnTeam(req.user.userId);
+  }
+
+  @AuditLog('CREATE', 'TEAM_TRYOUTS')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
+  @Post('tryouts/:id')
+  async createTryOuts(@Param('id') id: string, @Body() dto: TryoutsDto) {
+    return this.teamService.createTryOuts(id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
+  @Delete('tryouts/:id')
+  @AuditLog('DELETE', 'TEAM_TRYOUTS')
+  async deleteTryout(@Param('id') id: string) {
+    return this.teamService.deleteTryout(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.TEAM_ADMIN]))
+  @Get('tryouts/claimed')
+  async getTryoutsByClaimedUser(@Req() req) {
+    return this.teamService.getTryoutsByClaimedUser(req.user.userId, false);
+  }
+
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+  @Get('tryouts/all')
+  async getTryouts(@Req() req, @Param('userId') userId: string) {
+    return this.teamService.getTryoutsByClaimedUser(userId, true);
   }
 }
