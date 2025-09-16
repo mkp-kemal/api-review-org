@@ -45,10 +45,15 @@ export class UpdateReviewDto {
   @IsInt()
   safety: number;
 
-  @ApiProperty({ example: true, required: false, description: 'Apakah review dipublikasikan' })
+  @ApiProperty({ example: true, required: false, description: 'Is Public?' })
   @IsBoolean()
   @IsOptional()
   isPublic?: boolean;
+
+  @ApiProperty({ example: true, required: false, description: 'Is Highlight?' })
+  @IsBoolean()
+  @IsOptional()
+  isHighlight?: boolean;
 }
 
 export class UpdateReviewStatusDto {

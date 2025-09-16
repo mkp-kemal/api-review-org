@@ -88,6 +88,7 @@ export class TeamService {
                 state: true,
                 status: true,
                 claimedById: true,
+                logo: true,
                 subscription: {
                     select: {
                         plan: true
@@ -472,6 +473,7 @@ export class TeamService {
                     roles: true,
                     status: true,
                     updatedAt: true,
+                    logo: true,
                     organization: {
                         select: {
                             id: true,
@@ -970,4 +972,55 @@ export class TeamService {
             });
         }
     }
+
+    async uploadLogoTeam(teamId: string, file: MulterFile) {
+        const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+        if (!team) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
+        }
+
+        if (team.status !== OrgStatus.APPROVED) {
+            throw new BadRequestException(ErrorCode.TEAM_NOT_APPROVED);
+        }
+
+        if (!file) {
+            throw new BadRequestException(ErrorCode.NO_FILE_UPLOADED);
+        }
+
+        if (!file.mimetype.startsWith('image/')) {
+            throw new BadRequestException(ErrorCode.ONLY_IMAGE_FILES_ALLOWED);
+        }
+
+        if (file.size > 2e6) {
+            throw new BadRequestException(ErrorCode.EACH_FILE_SIZE_SHOULD_BE_UNDER_2MB);
+        }
+
+        // generate unique key untuk file di AWS
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = extname(file.originalname);
+        const fileKey = `logo-team-${uniqueSuffix}${ext}`;
+
+        // upload ke AWS S3
+        const command = new PutObjectCommand({
+            Bucket: this.bucketName,
+            Key: fileKey,
+            Body: file.buffer,
+            ContentType: file.mimetype,
+        });
+
+        await this.s3.send(command);
+
+        const fileUrl = `https://${this.bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
+
+        // update logo di Team (replace existing logo URL)
+        const updatedTeam = await this.prisma.team.update({
+            where: { id: teamId },
+            data: {
+                logo: fileUrl,
+            },
+        });
+
+        return updatedTeam.logo;
+    }
+
 }
