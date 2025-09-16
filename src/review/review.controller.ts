@@ -61,6 +61,18 @@ export class ReviewController {
         return this.reviewService.updateReviewStatus(teamId, isPublic);
     }
 
+    @ApiOperation({ summary: 'Update highlight' })
+    @ApiResponse({ status: 200, description: 'Highlight review updated successfully' })
+    @ApiResponse({ status: 404, description: 'Review not found' })
+    @AuditLog('UPDATE', 'REVIEWS_HIGHLIGHT')
+    @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
+    @Patch(':reviewId/reviews/highlight')
+    async updateHighlight(
+        @Param('reviewId') reviewId: string,
+    ) {
+        return this.reviewService.updateReviewHighlight(reviewId);
+    }
+
     @ApiOperation({ summary: 'List reviews (sorted by recent or rating)' })
     @ApiQuery({ name: 'sort', enum: ['recent', 'rating'], required: false })
     @ApiResponse({ status: 200, description: 'List of reviews returned' })
@@ -117,15 +129,15 @@ export class ReviewController {
         return { years };
     }
 
-      @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
-      @Get('reviews/access/claim')
-      async getOrganizationWithAccess(@Req() req, @Query('sort') sort: 'recent' | 'rating' = 'recent') {
+    @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+    @Get('reviews/access/claim')
+    async getOrganizationWithAccess(@Req() req, @Query('sort') sort: 'recent' | 'rating' = 'recent') {
         return this.reviewService.getReviewsWithAccess(req.user.userId, sort);
-      }
+    }
 
-      @Delete('reviews/:id')
-      @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
-      async deleteReview(@Param('id') id: string) {
+    @Delete('reviews/:id')
+    @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
+    async deleteReview(@Param('id') id: string) {
         return this.reviewService.deleteReview(id);
-      }
+    }
 }

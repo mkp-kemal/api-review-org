@@ -297,4 +297,49 @@ export class TeamController {
   async getTryouts(@Req() req, @Param('userId') userId: string) {
     return this.teamService.getTryoutsByClaimedUser(userId, true);
   }
+
+  @ApiBody({
+    schema: {
+      properties: {
+        teamId: {
+          type: 'string',
+          example: 'team_123',
+        },
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+      required: ['teamId', 'files'],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: multer.memoryStorage(),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          return cb(new BadRequestException('Only image files are allowed!'), false);
+        }
+        cb(null, true);
+      },
+      // limits: { fileSize: 2 * 1024 * 1024 },
+    }),
+  )
+  @AuditLog('CREATE', 'TEAM_LOGO')
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+  @Post('upload-logo')
+  async uploadLogoAws(
+    @UploadedFile() file: MulterFile,
+    @Body() dto: UploadFileDto,
+  ) {
+    const photoPath = await this.teamService.uploadLogoTeam(dto.teamId, file);
+    return {
+      message: 'File uploaded successfully',
+      photo: photoPath,
+    };
+  }
+
 }

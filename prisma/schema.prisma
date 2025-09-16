@@ -72,6 +72,7 @@ model Organization {
   submittedById  String?
   approvedById   String?
   rejectedReason String?
+  logo           String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -97,6 +98,7 @@ model Team {
   approvedById   String?
   rejectedReason String?
   claimedById    String?
+  logo           String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -141,11 +143,15 @@ model Review {
   editedAt            DateTime?
   flags               Flag[]
   orgResponse         OrgResponse?
+  isHighlight Boolean  @default(false)
+  
   rating              Rating?      @relation("ReviewRating")
   team                Team         @relation(fields: [teamId], references: [id])
   user                User         @relation(fields: [userId], references: [id])
 
   @@unique([userId, teamId, season_term, season_year])
+  @@index([teamId])
+  @@map("Review")
 }
 
 model Rating {
