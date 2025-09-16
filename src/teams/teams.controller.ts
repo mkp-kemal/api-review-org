@@ -6,7 +6,7 @@ import {
 import { TeamService } from "./team.service";
 import { JwtAuthGuard } from "src/auth/strategies/jwt-auth.guard";
 import { RoleGuard } from "src/auth/strategies/role-guard";
-import { Role, TypeSystemUpload } from "@prisma/client";
+import { Role, SubscriptionPlan, TypeSystemUpload } from "@prisma/client";
 import { AuditLog } from "src/audit/audit-log.decorator";
 import { TeamDto } from "src/auth/dto/create-team.dto";
 import { FileInterceptor, FilesInterceptor } from "@nestjs/platform-express";
@@ -115,6 +115,12 @@ export class TeamController {
   @Get('access/claim')
   async getTeamsWithAccess(@Req() req) {
     return this.teamService.getTeamsWithAccess(req.user.userId, req.user.role);
+  }
+
+  @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+  @Get('access/claimby/:plan')
+  async getTeamsWithAccessPlan(@Req() req, @Param('plan') plan: SubscriptionPlan) {
+    return this.teamService.getTeamsWithAccessByPlan(req.user.userId, req.user.role, plan);
   }
 
   @ApiResponse({ status: 200, description: 'Team successfully claimed' })

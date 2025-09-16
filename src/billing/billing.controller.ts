@@ -46,7 +46,10 @@ export class BillingController {
     return this.billingService.getSubscriptionStatus(organizationId);
   }
 
-
+  @ApiOperation({ summary: 'Get checkout session' })
+  @ApiResponse({ status: 200, description: '{GET URL PAYMENT FROM STRIPE}' })
+  @AuditLog("GET", "CHEKOUT_SESSION")
+  @UseGuards(JwtAuthGuard)
   @Get('checkout-session')
   async getCheckoutSession(@Query('session_id') sessionId: string) {
     if (!sessionId) {
@@ -60,5 +63,11 @@ export class BillingController {
   @Get('transactions')
   async getTransactions() {
     return this.billingService.getAllSubscriptionTransactions();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('checkout/save/:targetId')
+  async getCheckoutSave(@Param('targetId') targetId: string, @Query('plan') plan: SubscriptionPlan) {
+    return this.billingService.getCheckoutSave(targetId, plan);
   }
 }

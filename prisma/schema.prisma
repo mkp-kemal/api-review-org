@@ -143,11 +143,11 @@ model Review {
   editedAt            DateTime?
   flags               Flag[]
   orgResponse         OrgResponse?
-  isHighlight Boolean  @default(false)
-  
-  rating              Rating?      @relation("ReviewRating")
-  team                Team         @relation(fields: [teamId], references: [id])
-  user                User         @relation(fields: [userId], references: [id])
+  isHighlight         Boolean      @default(false)
+
+  rating Rating? @relation("ReviewRating")
+  team   Team    @relation(fields: [teamId], references: [id])
+  user   User    @relation(fields: [userId], references: [id])
 
   @@unique([userId, teamId, season_term, season_year])
   @@index([teamId])
@@ -248,6 +248,19 @@ model TryOuts {
   updatedAt   DateTime @updatedAt
 
   team Team? @relation(fields: [teamId], references: [id])
+}
+
+model CheckoutSession {
+  id         String   @id @default(cuid())
+  targetId   String
+  targetType String
+  amount     Int
+  currency   String   @default("usd")
+  status     String
+  url        String
+  plan       SubscriptionPlan
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 enum Role {
