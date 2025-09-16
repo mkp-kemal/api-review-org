@@ -430,4 +430,64 @@ export class OrganizationService {
       }
     });
   }
+
+  async getTeamsWithAccessByPlan(userId: string, role: Role, plan: SubscriptionPlan) {
+  const planOrder = [SubscriptionPlan.BASIC, SubscriptionPlan.PRO, SubscriptionPlan.ELITE];
+  const currentPlanIndex = planOrder.indexOf(plan);
+
+  if (currentPlanIndex <= 0) {
+    return [];
+  }
+
+  const lowerPlans = planOrder.slice(0, currentPlanIndex);
+
+  if (role === 'ORG_ADMIN') {
+    return this.prisma.organization.findMany({
+      where: {
+        claimedById: userId,
+        subscription: { plan: { in: lowerPlans } }
+      },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        state: true,
+        website: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        approvedById: true,
+        submittedById: true,
+        logo: true,
+        subscription: {
+          select: {
+            id: true,
+            plan: true,
+            status: true,
+            stripeSubId: true,
+            createdAt: true,
+          }
+        },
+        teams: {
+          select: {
+            id: true,
+            name: true,
+            division: true,
+            ageLevel: true,
+            city: true,
+            state: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            logo: true,
+          }
+        }
+      }
+    });
+  }
+
+  // Untuk role selain ORG_ADMIN, bisa sesuaikan sesuai kebutuhan
+  return [];
+}
+
 }

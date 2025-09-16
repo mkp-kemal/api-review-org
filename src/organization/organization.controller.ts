@@ -3,7 +3,7 @@ import { OrganizationService } from './organization.service';
 import { JwtAuthGuard } from 'src/auth/strategies/jwt-auth.guard';
 import { RoleGuard } from 'src/auth/strategies/role-guard';
 import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
-import { OrgStatus, Role } from '@prisma/client';
+import { OrgStatus, Role, SubscriptionPlan } from '@prisma/client';
 import { AuditLog } from 'src/audit/audit-log.decorator';
 import { OptionalJwtAuthGuard } from 'src/auth/strategies/jwt-optional-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -262,4 +262,10 @@ export class OrganizationController {
   async getOrganizationWithAccess(@Req() req) {
     return this.orgService.getOrganizationWithAccess(req.user.userId);
   }
+
+    @UseGuards(JwtAuthGuard, RoleGuard([Role.ORG_ADMIN, Role.SITE_ADMIN, Role.TEAM_ADMIN]))
+    @Get('access/claimby/:plan')
+    async getTeamsWithAccessPlan(@Req() req, @Param('plan') plan: SubscriptionPlan) {
+      return this.orgService.getTeamsWithAccessByPlan(req.user.userId, req.user.role, plan);
+    }
 }

@@ -202,7 +202,6 @@ export class BillingService {
     }
 
     let priceId: string | undefined;
-
     priceId = this.getPriceIdForPlan(body.plan);
 
     if (!priceId) {
@@ -215,10 +214,23 @@ export class BillingService {
     if (body.teamId) {
       const team = await this.prisma.team.findUnique({
         where: { id: body.teamId },
+        include: { subscription: true },
       });
 
       if (!team) {
         throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
+      }
+
+      // Validasi plan
+      const currentPlan = team.subscription?.plan;
+      if (currentPlan) {
+        const planOrder = [SubscriptionPlan.BASIC, SubscriptionPlan.PRO, SubscriptionPlan.ELITE];
+        const currentIndex = planOrder.indexOf(currentPlan);
+        const newIndex = planOrder.indexOf(body.plan);
+
+        if (newIndex <= currentIndex) {
+          throw new BadRequestException(ErrorCode.INVALID_PLAN_OR_STRIPE_PRICE);
+        }
       }
 
       targetType = 'team';
@@ -226,10 +238,23 @@ export class BillingService {
     } else if (body.organizationId) {
       const org = await this.prisma.organization.findUnique({
         where: { id: body.organizationId },
+        include: { subscription: true },
       });
 
       if (!org) {
         throw new BadRequestException(ErrorCode.ORGANIZATION_NOT_FOUND);
+      }
+
+      // Validasi plan
+      const currentPlan = org.subscription?.plan;
+      if (currentPlan) {
+        const planOrder = [SubscriptionPlan.BASIC, SubscriptionPlan.PRO, SubscriptionPlan.ELITE];
+        const currentIndex = planOrder.indexOf(currentPlan);
+        const newIndex = planOrder.indexOf(body.plan);
+
+        if (newIndex <= currentIndex) {
+          throw new BadRequestException(ErrorCode.INVALID_PLAN_OR_STRIPE_PRICE);
+        }
       }
 
       targetType = 'organization';
@@ -242,10 +267,7 @@ export class BillingService {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
+        { price: priceId, quantity: 1 },
       ],
       metadata: {
         plan: body.plan,
@@ -261,8 +283,22 @@ export class BillingService {
       cancel_url: `${process.env.APP_URL}/payment_cancel.html`,
     });
 
+    await this.prisma.checkoutSession.create({
+      data: {
+        id: session.id,
+        targetId,
+        amount: session.amount_total,
+        currency: session.currency,
+        status: session.payment_status,
+        url: session.url,
+        targetType,
+        plan: body.plan,
+      },
+    });
+
     return { url: session.url };
   }
+
 
   async handleWebhook(req, res) {
     const signature = req.headers['stripe-signature'] as string;
@@ -308,6 +344,7 @@ export class BillingService {
         const newPlan = subscription.metadata.plan as SubscriptionPlan;
         const orgId = subscription.metadata.organizationId;
         const teamId = subscription.metadata.teamId;
+        let targetId = "";
 
         if (!newPlan) {
           console.error("❌ Webhook Error: missing plan in subscription metadata");
@@ -323,6 +360,7 @@ export class BillingService {
           let subscriptionRecord;
 
           if (orgId) {
+            targetId = orgId;
             subscriptionRecord = await tx.subscription.upsert({
               where: { organizationId: orgId },
               update: {
@@ -339,7 +377,9 @@ export class BillingService {
                 status: "ACTIVE"
               },
             });
+
           } else if (teamId) {
+            targetId = teamId;
             subscriptionRecord = await tx.subscription.upsert({
               where: { teamId },
               update: {
@@ -356,16 +396,26 @@ export class BillingService {
                 status: "ACTIVE"
               },
             });
+
           }
 
+          const checkoutSessionRecord = await tx.checkoutSession.updateMany({
+            where: { targetId: targetId },
+            data: { status: 'paid' },
+          });
+
+          console.log(checkoutSessionRecord, "checkoutSessionRecord");
+
           if (subscriptionRecord) {
+            console.log(subscriptionRecord, 'subscriptionRecord');
+
             await tx.subscriptionTransaction.create({
               data: {
                 subscriptionId: subscriptionRecord.id,
                 amount: invoice.total,
                 currency: invoice.currency,
                 status: 'paid',
-                stripePaymentId: (invoice.payment_intent as string) || null, // <-- JANGAN fallback ke invoice.id!
+                stripePaymentId: (invoice.payment_intent as string) || null, // <-- dont be fallback to invoice.id!
               },
             });
           }
@@ -380,70 +430,89 @@ export class BillingService {
     }
   }
 
- async getAllSubscriptionTransactions() {
-  const transactions = await this.prisma.subscriptionTransaction.findMany({
-    include: {
-      subscription: { include: { organization: true, team: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  async getAllSubscriptionTransactions() {
+    const transactions = await this.prisma.subscriptionTransaction.findMany({
+      include: {
+        subscription: { include: { organization: true, team: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-  const customerIds = [
-    ...new Set(transactions.map(t => t.subscription?.stripeCustomerId).filter(Boolean)),
-  ];
+    const customerIds = [
+      ...new Set(transactions.map(t => t.subscription?.stripeCustomerId).filter(Boolean)),
+    ];
 
-  // Ambil semua customers
-  const customers = await Promise.all(
-    customerIds.map(id =>
-      this.stripe.customers.retrieve(id).catch(err => {
-        console.warn(`⚠️ Failed to retrieve customer ${id}:`, err.message);
-        return null;
+    // Ambil semua customers
+    const customers = await Promise.all(
+      customerIds.map(id =>
+        this.stripe.customers.retrieve(id).catch(err => {
+          console.warn(`⚠️ Failed to retrieve customer ${id}:`, err.message);
+          return null;
+        })
+      )
+    );
+    const customerMap = new Map(customerIds.map((id, i) => [id, customers[i]]));
+
+    // Ambil invoices
+    const invoiceMap = new Map<string, Stripe.Invoice>();
+    await Promise.all(
+      transactions.map(async tx => {
+        const id = tx.stripePaymentId;
+        if (!id || !id.startsWith('in_')) return;
+
+        try {
+          const invoice = await this.stripe.invoices.retrieve(
+            id
+          ) as Stripe.Invoice;
+          invoiceMap.set(id, invoice);
+        } catch (err: any) {
+          console.warn(`⚠️ Failed to retrieve invoice ${id}:`, err.message);
+        }
       })
-    )
-  );
-  const customerMap = new Map(customerIds.map((id, i) => [id, customers[i]]));
+    );
 
-  // Ambil invoices
-  const invoiceMap = new Map<string, Stripe.Invoice>();
-  await Promise.all(
-    transactions.map(async tx => {
-      const id = tx.stripePaymentId;
-      if (!id || !id.startsWith('in_')) return;
+    // Gabungkan data
+    return transactions.map(tx => {
+      const customer = tx.subscription?.stripeCustomerId
+        ? customerMap.get(tx.subscription.stripeCustomerId)
+        : null;
 
-      try {
-        const invoice = await this.stripe.invoices.retrieve(
-          id
-        ) as Stripe.Invoice;
-        invoiceMap.set(id, invoice);
-      } catch (err: any) {
-        console.warn(`⚠️ Failed to retrieve invoice ${id}:`, err.message);
-      }
-    })
-  );
+      const invoice = tx.stripePaymentId
+        ? invoiceMap.get(tx.stripePaymentId)
+        : null;
 
-  // Gabungkan data
-  return transactions.map(tx => {
-    const customer = tx.subscription?.stripeCustomerId
-      ? customerMap.get(tx.subscription.stripeCustomerId)
-      : null;
+      // Ambil tipe payment method dari invoice
+      const paymentMethods = invoice?.payment_settings?.payment_method_types ?? [];
 
-    const invoice = tx.stripePaymentId
-      ? invoiceMap.get(tx.stripePaymentId)
-      : null;
+      return {
+        ...tx,
+        customer,
+        paymentMethods,
+        invoice_pdf: invoice?.invoice_pdf ?? null,
+        hosted_invoice_url: invoice?.hosted_invoice_url ?? null,
+      };
+    });
+  }
 
-    // Ambil tipe payment method dari invoice
-    const paymentMethods = invoice?.payment_settings?.payment_method_types ?? [];
+  async getCheckoutSave(targetId: string, plan: SubscriptionPlan) {
+    const team = await this.prisma.team.findUnique({ where: { id: targetId } });
+    const organization = await this.prisma.organization.findUnique({ where: { id: targetId } });
 
-    return {
-      ...tx,
-      customer,
-      paymentMethods,
-      invoice_pdf: invoice?.invoice_pdf ?? null,
-      hosted_invoice_url: invoice?.hosted_invoice_url ?? null,
-    };
-  });
-}
+    if (!team && !organization) {
+      throw new BadRequestException(ErrorCode.INVALID_TARGET_ID);
+    }
 
+    const checkoutSession = await this.prisma.checkoutSession.findFirst({
+      where: {
+        targetId,
+        status: 'unpaid',
+        plan,
+      },
+      select: { url: true, id: true, plan: true, status: true, createdAt: true }
+    });
+
+    return checkoutSession || { message: 'No checkout session found for this target and plan', status: 400 };
+  }
 
 
 

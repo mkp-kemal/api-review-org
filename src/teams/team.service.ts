@@ -47,6 +47,7 @@ export class TeamService {
                 submittedById: true,
                 roles: true,
                 status: true,
+                logo: true,
                 updatedAt: true,
                 claimedBy: {
                     select: {
@@ -512,6 +513,7 @@ export class TeamService {
                     submittedById: true,
                     roles: true,
                     status: true,
+                    logo: true,
                     updatedAt: true,
                     organization: {
                         select: {
@@ -536,6 +538,113 @@ export class TeamService {
             });
         }
     }
+
+    async getTeamsWithAccessByPlan(userId: string, role: Role, plan: SubscriptionPlan) {
+        const planOrder = [SubscriptionPlan.BASIC, SubscriptionPlan.PRO, SubscriptionPlan.ELITE];
+        const currentPlanIndex = planOrder.indexOf(plan);
+
+        if (currentPlanIndex <= 0) {
+            return [];
+        }
+
+        const lowerPlans = planOrder.slice(0, currentPlanIndex);
+
+        if (role === 'ORG_ADMIN') {
+            const orgs = await this.prisma.organization.findMany({
+                where: {
+                    claimedById: userId,
+                    subscription: { plan: { in: lowerPlans } }
+                },
+                select: { id: true }
+            });
+
+            const orgIds = orgs.map(o => o.id);
+
+            return this.prisma.team.findMany({
+                where: {
+                    organizationId: { in: orgIds }
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    division: true,
+                    ageLevel: true,
+                    city: true,
+                    state: true,
+                    createdAt: true,
+                    approvedById: true,
+                    submittedById: true,
+                    roles: true,
+                    status: true,
+                    updatedAt: true,
+                    logo: true,
+                    organization: {
+                        select: {
+                            id: true,
+                            name: true,
+                            city: true,
+                            state: true,
+                            website: true,
+                            createdAt: true
+                        }
+                    },
+                    subscription: {
+                        select: {
+                            id: true,
+                            status: true,
+                            plan: true,
+                            stripeSubId: true,
+                            createdAt: true,
+                        },
+                    }
+                }
+            });
+        }
+
+        if (role === 'TEAM_ADMIN') {
+            return this.prisma.team.findMany({
+                where: {
+                    claimedById: userId,
+                    subscription: { plan: { in: lowerPlans } }
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    division: true,
+                    ageLevel: true,
+                    city: true,
+                    state: true,
+                    createdAt: true,
+                    approvedById: true,
+                    submittedById: true,
+                    roles: true,
+                    status: true,
+                    logo: true,
+                    updatedAt: true,
+                    organization: {
+                        select: {
+                            id: true,
+                            name: true,
+                            city: true,
+                            state: true,
+                            website: true,
+                            createdAt: true
+                        }
+                    },
+                    subscription: {
+                        select: {
+                            id: true,
+                            status: true,
+                            plan: true,
+                            stripeSubId: true,
+                            createdAt: true,
+                        },
+                    }
+                }
+            });
+        }
+    }
+
 
     async claimTeamByEmail(userId: string, email: string, teamId: string) {
         let user = null;
