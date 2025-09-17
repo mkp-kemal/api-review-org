@@ -2,15 +2,17 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from 'prisma/prisma.service';
+import { env } from 'process';
 import { CreateResponseReviewDto } from 'src/auth/dto/create-response-review.dto';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
 import { UpdateReviewDto } from 'src/auth/dto/update-review.dto';
 import { ErrorCode } from 'src/common/error-code';
+import { EmailService } from 'src/email/email.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class ReviewService {
-    constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis,
+    constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis, private emailService: EmailService,
     ) { }
 
     async createReview(
@@ -121,6 +123,18 @@ export class ReviewService {
                 targetId: review.id,
             },
         });
+
+        if (user.email){
+            await this.emailService.sendReviewsPost({
+                email: user.email,
+                date: new Date(),
+                team: team.name,
+                title: dto.title,
+                body: dto.body,
+                teamUrl: `${process.env.APP_URL}/Org_profile.html?id=${team.id}`,
+                star: overall
+            });
+        }
 
         return { ...result, userId };
     }
