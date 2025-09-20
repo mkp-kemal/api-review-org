@@ -19,7 +19,7 @@ export class UserService {
 
   async findAll() {
     return this.prisma.user.findMany({
-      select: { id: true, email: true, role: true, isVerified: true, isBanned: true, createdAt: true },
+      select: { id: true, email: true, role: true, isVerified: true, isBanned: true, lastLogin: true, createdAt: true },
     });
   }
 

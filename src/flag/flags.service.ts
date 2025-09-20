@@ -24,6 +24,7 @@ export class FlagsService {
           email: null,
           passwordHash: null,
           isVerified: false,
+          lastLogin: new Date()
         },
       });
 

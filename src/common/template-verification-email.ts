@@ -1,5 +1,5 @@
 import { SubscriptionPlan } from "@prisma/client";
-import { checkoutPlan, orgClaim, reviewsFlagged, reviewsPosted, teamClaim, teamClaimByMe } from "./template-html";
+import { checkoutPlan, orgClaim, reviewsFlagged, reviewsPosted, teamClaim, teamClaimToMe } from "./template-html";
 
 export type requiremenetsEmail = {
     to: string,
@@ -66,7 +66,7 @@ export function templateTeamClaim(config: configEmailParamsClaim){
 }
 
 export function templateTeamClaimByMe(config: configEmailParamsClaim){
-    return teamClaimByMe(config);
+    return teamClaimToMe(config);
 }
 
 export function templateCheckoutPlan(config: configEmailParamsCheckout){

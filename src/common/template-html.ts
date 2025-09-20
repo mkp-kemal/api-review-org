@@ -310,10 +310,10 @@ export function teamClaim(config: configEmailParamsClaim) {
                             </tr>
                             <tr>
                                 <td style="padding: 40px 40px 20px; text-align: center;">
-                                    <h1 style="margin: 0; font-size: 24px; color: #333333;">🎉 Claimed Organization !</h1>
+                                    <h1 style="margin: 0; font-size: 24px; color: #333333;">🎉 Claimed Team!</h1>
                                     <p style="font-size: 16px; color: #555555; line-height: 1.6; margin: 20px 0;">
                                         Halo <strong>${emailto}</strong>,<br>
-                                        The team <strong>${nameOrg}</strong> has been claimed by ${email}!
+                                        The team <strong>${nameOrg}</strong> has been claimed to you by ${email}!
                                     </p>
                                 </td>
                             </tr>
@@ -365,7 +365,7 @@ export function teamClaim(config: configEmailParamsClaim) {
         `;
 }
 
-export function teamClaimByMe(config: configEmailParamsClaim) {
+export function teamClaimToMe(config: configEmailParamsClaim) {
     const {
         email,
         emailto,
@@ -390,10 +390,10 @@ export function teamClaimByMe(config: configEmailParamsClaim) {
                             </tr>
                             <tr>
                                 <td style="padding: 40px 40px 20px; text-align: center;">
-                                    <h1 style="margin: 0; font-size: 24px; color: #333333;">🎉 Claimed Team by ${email} !</h1>
+                                    <h1 style="margin: 0; font-size: 24px; color: #333333;">🎉 Claimed Team!</h1>
                                     <p style="font-size: 16px; color: #555555; line-height: 1.6; margin: 20px 0;">
-                                        Halo <strong>${emailto}</strong>,<br>
-                                        The team <strong>${nameOrg}</strong> has been claimed to you by ${email}!
+                                        Halo <strong>${email}</strong>,<br>
+                                        The team <strong>${nameOrg}</strong> has been claimed to ${emailto}!
                                     </p>
                                 </td>
                             </tr>

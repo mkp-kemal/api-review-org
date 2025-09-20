@@ -18,6 +18,7 @@ model User {
   updatedAt    DateTime @updatedAt
   isBanned     Boolean  @default(false)
   isDeleted    Boolean  @default(false)
+  lastLogin    DateTime
 
   submittedOrgs Organization[] @relation("OrgSubmittedBy")
   approvedOrgs  Organization[] @relation("OrgApprovedBy")

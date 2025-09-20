@@ -136,21 +136,24 @@ export class EmailService {
         }
     }
 
-    async sendOrgClaimTeamByMe(config: configEmailParamsClaim) {
-    const {
-        email,   
-        emailto, 
-    } = config;
+    async sendOrgClaimTeamToMe(config: configEmailParamsClaim) {
+        const {
+            email,
+            date,
+            nameOrg,
+            adminUrl,
+            emailto,
+        } = config;
 
-    const msg: requiremenetsEmail = {
-        to: email, 
-        from: this.config.get('SENDGRID_FROM_EMAIL'),
-        subject: `Claimed Team to ${emailto}`,
-        html: templateTeamClaimByMe(config)
-    };
+        const msg: requiremenetsEmail = {
+            to: email,
+            from: this.config.get('SENDGRID_FROM_EMAIL'),
+            subject: `Claimed Team to ${emailto}`,
+            html: templateTeamClaimByMe(config)
+        };
 
-    await sgMail.send(msg);
-}
+        await sgMail.send(msg);
+    }
 
 
     async sendCheckoutPlan(config: configEmailParamsCheckout) {

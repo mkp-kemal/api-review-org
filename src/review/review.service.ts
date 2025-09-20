@@ -29,6 +29,7 @@ export class ReviewService {
                     email: null,
                     passwordHash: null,
                     isVerified: false,
+                    lastLogin: new Date()
                 },
             });
 

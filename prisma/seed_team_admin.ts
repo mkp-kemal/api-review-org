@@ -15,6 +15,7 @@ async function main() {
       passwordHash,
       role: Role.TEAM_ADMIN,
       isVerified: true,
+      lastLogin: new Date(),
     },
   });
 

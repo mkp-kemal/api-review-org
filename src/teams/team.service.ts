@@ -742,15 +742,13 @@ export class TeamService {
                 emailto: email
             });
 
-            // if (email !== user.email) {
-            //     await this.emailService.sendOrgClaimTeamByMe({
-            //         email: user.email,
-            //         date: new Date(),
-            //         nameOrg: team.name,
-            //         adminUrl: `${process.env.APP_URL}/admin/index.html`,
-            //         emailto: email
-            //     });
-            // }
+            await this.emailService.sendOrgClaimTeamToMe({
+                email: me.email,
+                date: new Date(),
+                nameOrg: team.name,
+                adminUrl: `${process.env.APP_URL}/admin/index.html`,
+                emailto: email
+            });
         }
 
 
