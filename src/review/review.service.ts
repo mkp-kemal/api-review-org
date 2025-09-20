@@ -2,13 +2,12 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from 'prisma/prisma.service';
-import { env } from 'process';
 import { CreateResponseReviewDto } from 'src/auth/dto/create-response-review.dto';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
 import { UpdateReviewDto } from 'src/auth/dto/update-review.dto';
 import { ErrorCode } from 'src/common/error-code';
 import { EmailService } from 'src/email/email.service';
-import { v4 as uuidv4 } from 'uuid';
+import { Parser } from 'json2csv';
 
 @Injectable()
 export class ReviewService {
@@ -124,7 +123,7 @@ export class ReviewService {
             },
         });
 
-        if (user.email){
+        if (user.email) {
             await this.emailService.sendReviewsPost({
                 email: user.email,
                 date: new Date(),
@@ -233,12 +232,12 @@ export class ReviewService {
         sort: 'recent' | 'rating' = 'recent',
         isByPublic = true,
     ) {
-        // const cacheKey = `reviews:${sort}:${isByPublic}`;
-        // const cached = await this.redis.get(cacheKey);
 
-        // if (cached) {
-        //     return JSON.parse(cached);
-        // }
+
+
+
+
+
 
         const orderBy =
             sort === 'rating'
@@ -292,7 +291,7 @@ export class ReviewService {
         });
 
 
-        // await this.redis.set(cacheKey, JSON.stringify(reviews), 'EX', 60);
+
 
         return reviews;
     }
@@ -429,5 +428,89 @@ export class ReviewService {
         }
 
         return this.prisma.review.delete({ where: { id } });
+    }
+
+    async exportCSV(sort: 'recent' | 'rating' = 'recent', isByPublic = true) {
+        const reviews = await this.getReviews(sort, isByPublic);
+
+        const csvData = reviews.map((review, index) => {
+            const flags = review.flags.length > 0
+                ? review.flags
+                    .map(f => `${f.reporter?.email || 'unknown'} - ${f.reason || 'no reason'}`)
+                    .join('; ')
+                : 'No flags';
+
+            return {
+                No: index + 1,
+                ReviewID: review.id,
+                Title: review.title,
+                Body: review.body,
+                Season: `${review.season_term} ${review.season_year}`,
+                AgeLevel: review.age_level_at_review,
+                IsPublic: review.isPublic ? 'Yes' : 'No',
+                CreatedAt: review.createdAt.toISOString(),
+                EditedAt: review.editedAt ? review.editedAt.toISOString() : 'Never',
+                IsHighlight: review.isHighlight ? 'Yes' : 'No',
+                RatingOverall: review.rating.overall,
+                RatingCoaching: review.rating.coaching,
+                RatingDevelopment: review.rating.development,
+                RatingTransparency: review.rating.transparency,
+                RatingCulture: review.rating.culture,
+                RatingSafety: review.rating.safety,
+                TeamName: review.team.name,
+                TeamDivision: review.team.division,
+                TeamCity: review.team.city,
+                TeamState: review.team.state,
+                OrganizationName: review.team.organization.name,
+                OrganizationStatus: review.team.organization.status,
+                SubscriptionPlan: review.team.subscription?.plan || 'N/A',
+                ReviewerEmail: review.user.email,
+                OrgResponse: review.orgResponse ? review.orgResponse.body : 'No response',
+                OrgResponderEmail: review.orgResponse?.user?.email || 'N/A',
+                Flags: flags,
+            };
+        });
+
+
+        const fields = [
+            'No',
+            'ReviewID',
+            'Title',
+            'Body',
+            'Season',
+            'AgeLevel',
+            'IsPublic',
+            'CreatedAt',
+            'EditedAt',
+            'IsHighlight',
+            'RatingOverall',
+            'RatingCoaching',
+            'RatingDevelopment',
+            'RatingTransparency',
+            'RatingCulture',
+            'RatingSafety',
+            'TeamName',
+            'TeamDivision',
+            'TeamCity',
+            'TeamState',
+            'OrganizationName',
+            'OrganizationStatus',
+            'SubscriptionPlan',
+            'ReviewerEmail',
+            'OrgResponse',
+            'OrgResponderEmail',
+            'Flags',
+        ];
+
+        const opts = { fields };
+        const parser = new Parser(opts);
+
+        try {
+            const csv = parser.parse(csvData);
+            return csv;
+        } catch (err) {
+            console.error(err);
+            throw new Error('Error generating CSV');
+        }
     }
 }

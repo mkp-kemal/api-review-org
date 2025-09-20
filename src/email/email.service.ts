@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import * as sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
-import { requiremenetsEmail, templateResetPassEmailHTML, templateReviewsPosted, templateVerifEmailHTML } from 'src/common/template-verification-email';
+import { configEmailParamsClaim, configEmailParamsReviews, requiremenetsEmail, templateOrgClaim, templateResetPassEmailHTML, templateReviewsFlagged, templateReviewsPosted, templateVerifEmailHTML } from 'src/common/template-verification-email';
 
 @Injectable()
 export class EmailService {
@@ -39,7 +39,7 @@ export class EmailService {
         await sgMail.send(msg);
     }
 
-    async sendReviewsPost(config) {
+    async sendReviewsPost(config: configEmailParamsReviews) {
         const {
             email,
             date,
@@ -54,6 +54,54 @@ export class EmailService {
             from: this.config.get('SENDGRID_FROM_EMAIL'),
             subject: 'Reviews Posted',
             html: templateReviewsPosted(config)
+        };
+
+        try {
+            await sgMail.send(msg);
+        } catch (error) {
+            console.error('SendGrid send error:', error);
+            throw new InternalServerErrorException('Failed to send email reviews');
+        }
+    }
+
+    async sendReviewsFlagged(config: configEmailParamsReviews) {
+        const {
+            email,
+            date,
+            title,
+            body,
+            star,
+            teamUrl
+        } = config;
+
+        const msg: requiremenetsEmail = {
+            to: email,
+            from: this.config.get('SENDGRID_FROM_EMAIL'),
+            subject: 'Reviews Flagged',
+            html: templateReviewsFlagged(config)
+        };
+
+        try {
+            await sgMail.send(msg);
+        } catch (error) {
+            console.error('SendGrid send error:', error);
+            throw new InternalServerErrorException('Failed to send email reviews');
+        }
+    }
+
+    async sendOrgClaim(config: configEmailParamsClaim) {
+        const {
+            email,
+            date,
+            nameOrg,
+            adminUrl
+        } = config;
+
+        const msg: requiremenetsEmail = {
+            to: email,
+            from: this.config.get('SENDGRID_FROM_EMAIL'),
+            subject: 'Claimed Organization',
+            html: templateOrgClaim(config)
         };
 
         try {
