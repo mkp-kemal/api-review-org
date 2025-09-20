@@ -211,7 +211,8 @@ export class OrganizationService {
         email: user.email,
         date: new Date(),
         adminUrl: `${process.env.APP_URL}/admin/index.html`,
-        nameOrg: org.name
+        nameOrg: org.name,
+        emailto: ""
       });
     }
 

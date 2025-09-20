@@ -6,6 +6,7 @@ import { StripeService } from 'src/stripe/stripe.service';
 import { ErrorCode } from 'src/common/error-code';
 import { CheckoutDto } from 'src/auth/dto/checkout.dto';
 import { ConfigService } from '@nestjs/config';
+import { EmailService } from 'src/email/email.service';
 
 @Injectable()
 export class BillingService {
@@ -15,7 +16,8 @@ export class BillingService {
   constructor(
     private prisma: PrismaService,
     private stripeService: StripeService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private emailService: EmailService
   ) {
     this.stripe = new Stripe(configService.get('STRIPE_SECRET_KEY'), {
       apiVersion: '2025-08-27.basil',
@@ -210,6 +212,7 @@ export class BillingService {
 
     let targetType: 'team' | 'organization' | null = null;
     let targetId: string | null = null;
+    let targetName: string | null = null;
 
     if (body.teamId) {
       const team = await this.prisma.team.findUnique({
@@ -221,7 +224,7 @@ export class BillingService {
         throw new BadRequestException(ErrorCode.TEAM_NOT_FOUND);
       }
 
-      // Validasi plan
+
       const currentPlan = team.subscription?.plan;
       if (currentPlan) {
         const planOrder = [SubscriptionPlan.BASIC, SubscriptionPlan.PRO, SubscriptionPlan.ELITE];
@@ -235,6 +238,7 @@ export class BillingService {
 
       targetType = 'team';
       targetId = team.id;
+      targetName = team.name;
     } else if (body.organizationId) {
       const org = await this.prisma.organization.findUnique({
         where: { id: body.organizationId },
@@ -245,7 +249,7 @@ export class BillingService {
         throw new BadRequestException(ErrorCode.ORGANIZATION_NOT_FOUND);
       }
 
-      // Validasi plan
+
       const currentPlan = org.subscription?.plan;
       if (currentPlan) {
         const planOrder = [SubscriptionPlan.BASIC, SubscriptionPlan.PRO, SubscriptionPlan.ELITE];
@@ -259,6 +263,7 @@ export class BillingService {
 
       targetType = 'organization';
       targetId = org.id;
+      targetName = org.name;
     } else {
       throw new BadRequestException(ErrorCode.SOMETHING_WENT_WRONG);
     }
@@ -295,6 +300,19 @@ export class BillingService {
         plan: body.plan,
       },
     });
+
+    if (user.email) {
+      await this.emailService.sendCheckoutPlan({
+        email: user.email,
+        date: new Date(),
+        targetType,
+        amount: session.amount_total,
+        url: session.url,
+        targetName,
+        plan: body.plan,
+        currency: session.currency,
+      })
+    }
 
     return { url: session.url };
   }
@@ -415,7 +433,7 @@ export class BillingService {
                 amount: invoice.total,
                 currency: invoice.currency,
                 status: 'paid',
-                stripePaymentId: (invoice.payment_intent as string) || null, // <-- dont be fallback to invoice.id!
+                stripePaymentId: (invoice.payment_intent as string) || null,
               },
             });
           }
@@ -442,7 +460,7 @@ export class BillingService {
       ...new Set(transactions.map(t => t.subscription?.stripeCustomerId).filter(Boolean)),
     ];
 
-    // Ambil semua customers
+
     const customers = await Promise.all(
       customerIds.map(id =>
         this.stripe.customers.retrieve(id).catch(err => {
@@ -453,7 +471,7 @@ export class BillingService {
     );
     const customerMap = new Map(customerIds.map((id, i) => [id, customers[i]]));
 
-    // Ambil invoices
+
     const invoiceMap = new Map<string, Stripe.Invoice>();
     await Promise.all(
       transactions.map(async tx => {
@@ -471,7 +489,7 @@ export class BillingService {
       })
     );
 
-    // Gabungkan data
+
     return transactions.map(tx => {
       const customer = tx.subscription?.stripeCustomerId
         ? customerMap.get(tx.subscription.stripeCustomerId)
@@ -481,7 +499,7 @@ export class BillingService {
         ? invoiceMap.get(tx.stripePaymentId)
         : null;
 
-      // Ambil tipe payment method dari invoice
+
       const paymentMethods = invoice?.payment_settings?.payment_method_types ?? [];
 
       return {

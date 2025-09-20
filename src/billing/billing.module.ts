@@ -6,9 +6,10 @@ import { PrismaService } from 'prisma/prisma.service';
 import { BillingController } from './billing.controller';
 import { OrganizationModule } from 'src/organization/organization.module';
 import { StripeService } from 'src/stripe/stripe.service';
+import { EmailModule } from 'src/email/email.module';
 
 @Module({
-  imports: [OrganizationModule, StripeModule, ConfigModule],
+  imports: [OrganizationModule, StripeModule, ConfigModule, EmailModule],
   controllers: [BillingController],
   providers: [BillingService, PrismaService, StripeService],
   exports: [BillingService],

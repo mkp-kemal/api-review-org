@@ -10,13 +10,14 @@ import { ErrorCode } from "src/common/error-code";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import Redis from "ioredis";
 import { TryoutsDto } from "src/auth/dto/tryouts.dto";
+import { EmailService } from "src/email/email.service";
 
 @Injectable()
 export class TeamService {
     private s3: S3Client
     private bucketName = process.env.AWS_S3_BUCKET;
 
-    constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis) {
+    constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis, private readonly emailService: EmailService) {
         this.s3 = new S3Client({
             region: process.env.AWS_REGION,
             credentials: {
@@ -648,6 +649,7 @@ export class TeamService {
 
     async claimTeamByEmail(userId: string, email: string, teamId: string) {
         let user = null;
+        let me = null;
         let totalClaims = 0;
 
         if (!email) {
@@ -656,6 +658,11 @@ export class TeamService {
 
         user = await this.prisma.user.findUnique({
             where: { email: email },
+            include: { teamClaims: true },
+        });
+
+        me = await this.prisma.user.findUnique({
+            where: { id: userId },
             include: { teamClaims: true },
         });
 
@@ -724,6 +731,26 @@ export class TeamService {
                     },
                 },
             });
+        }
+
+        if (user.email) {
+            await this.emailService.sendOrgClaimTeam({
+                email: me.email,
+                date: new Date(),
+                nameOrg: team.name,
+                adminUrl: `${process.env.APP_URL}/admin/index.html`,
+                emailto: email
+            });
+
+            // if (email !== user.email) {
+            //     await this.emailService.sendOrgClaimTeamByMe({
+            //         email: user.email,
+            //         date: new Date(),
+            //         nameOrg: team.name,
+            //         adminUrl: `${process.env.APP_URL}/admin/index.html`,
+            //         emailto: email
+            //     });
+            // }
         }
 
 

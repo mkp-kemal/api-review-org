@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import * as sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
-import { configEmailParamsClaim, configEmailParamsReviews, requiremenetsEmail, templateOrgClaim, templateResetPassEmailHTML, templateReviewsFlagged, templateReviewsPosted, templateVerifEmailHTML } from 'src/common/template-verification-email';
+import { configEmailParamsCheckout, configEmailParamsClaim, configEmailParamsReviews, requiremenetsEmail, templateCheckoutPlan, templateOrgClaim, templateResetPassEmailHTML, templateReviewsFlagged, templateReviewsPosted, templateTeamClaim, templateTeamClaimByMe, templateVerifEmailHTML } from 'src/common/template-verification-email';
 
 @Injectable()
 export class EmailService {
@@ -109,6 +109,74 @@ export class EmailService {
         } catch (error) {
             console.error('SendGrid send error:', error);
             throw new InternalServerErrorException('Failed to send email reviews');
+        }
+    }
+
+    async sendOrgClaimTeam(config: configEmailParamsClaim) {
+        const {
+            email,
+            date,
+            nameOrg,
+            adminUrl,
+            emailto
+        } = config;
+
+        const msg: requiremenetsEmail = {
+            to: emailto,
+            from: this.config.get('SENDGRID_FROM_EMAIL'),
+            subject: `Claimed Team by ${email}`,
+            html: templateTeamClaim(config)
+        };
+
+        try {
+            await sgMail.send(msg);
+        } catch (error) {
+            console.error('SendGrid send error:', error);
+            throw new InternalServerErrorException('Failed to send email reviews');
+        }
+    }
+
+    async sendOrgClaimTeamByMe(config: configEmailParamsClaim) {
+    const {
+        email,   
+        emailto, 
+    } = config;
+
+    const msg: requiremenetsEmail = {
+        to: email, 
+        from: this.config.get('SENDGRID_FROM_EMAIL'),
+        subject: `Claimed Team to ${emailto}`,
+        html: templateTeamClaimByMe(config)
+    };
+
+    await sgMail.send(msg);
+}
+
+
+    async sendCheckoutPlan(config: configEmailParamsCheckout) {
+        const {
+            email,
+            date,
+            amount,
+            currency,
+            targetType,
+            url,
+            targetName,
+            plan
+        } = config;
+
+        const msg: requiremenetsEmail = {
+            to: email,
+            from: this.config.get('SENDGRID_FROM_EMAIL'),
+            subject: 'Checkout Plan',
+            html: templateCheckoutPlan(config)
+        };
+
+        try {
+            await sgMail.send(msg);
+        } catch (error) {
+            console.error('SendGrid send error:', error);
+            throw new InternalServerErrorException('Failed to send checkout plan');
         }
     }
 }
