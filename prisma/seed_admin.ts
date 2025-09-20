@@ -15,6 +15,7 @@ async function main() {
       passwordHash,
       role: Role.SITE_ADMIN,
       isVerified: true,
+      lastLogin: new Date(),
     },
   });
 

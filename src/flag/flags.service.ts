@@ -4,10 +4,11 @@ import { PrismaService } from 'prisma/prisma.service';
 import { CreateFlagDto } from 'src/auth/dto/create-flag.dto';
 import { UpdateFlagDto } from 'src/auth/dto/update-flag.dto';
 import { ErrorCode } from 'src/common/error-code';
+import { EmailService } from 'src/email/email.service';
 
 @Injectable()
 export class FlagsService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService, private emailService: EmailService) { }
 
   async flagReview(reviewId: string, userId: string, dto: CreateFlagDto, ip: string) {
 
@@ -23,6 +24,7 @@ export class FlagsService {
           email: null,
           passwordHash: null,
           isVerified: false,
+          lastLogin: new Date()
         },
       });
 
@@ -44,7 +46,7 @@ export class FlagsService {
     if (!reviewId) throw new BadRequestException(ErrorCode.REVIEW_ID_REQUIRED);
     if (!dto.reason) throw new BadRequestException(ErrorCode.REASON_REQUIRED);
 
-    const review = await this.prisma.review.findUnique({ where: { id: reviewId } });
+    const review = await this.prisma.review.findUnique({ where: { id: reviewId }, include:{rating: true, team: true} });
     if (!review) throw new NotFoundException(ErrorCode.REVIEW_NOT_FOUND);
 
     const existing = await this.prisma.flag.findFirst({
@@ -74,7 +76,7 @@ export class FlagsService {
       },
     });
 
-    return this.prisma.flag.create({
+    await this.prisma.flag.create({
       data: {
         review: { connect: { id: reviewId } },
         reporter: { connect: { id: userId } },
@@ -82,6 +84,22 @@ export class FlagsService {
         ip,
       },
     });
+
+    if (user.email) {
+      await this.emailService.sendReviewsFlagged({
+        email: user.email,
+        date: new Date(),
+        team: review.team.name,
+        title: review.title,
+        body: review.body,
+        teamUrl: `${process.env.APP_URL}/Org_profile.html?id=${review.teamId}`,
+        star: review.rating.overall,
+      });
+    }
+
+    return {
+      message: 'Flag successfully sent',
+    };
   }
 
 

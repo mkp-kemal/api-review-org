@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, UseGuards, Req, Get, Query, Put, BadRequestException, Patch, Delete } from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards, Req, Get, Query, Put, BadRequestException, Patch, Delete, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { ReviewService } from './review.service';
 import { CreateReviewDto } from 'src/auth/dto/create-review.dto';
@@ -9,6 +9,8 @@ import { Role } from '@prisma/client';
 import { AuditLog } from 'src/audit/audit-log.decorator';
 import { UpdateReviewDto } from 'src/auth/dto/update-review.dto';
 import { CreateResponseReviewDto } from 'src/auth/dto/create-response-review.dto';
+import { Response } from 'express';
+import { format } from 'date-fns';
 
 @ApiTags('Reviews')
 @Controller('teams')
@@ -139,5 +141,26 @@ export class ReviewController {
     @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN]))
     async deleteReview(@Param('id') id: string) {
         return this.reviewService.deleteReview(id);
+    }
+
+    @Get('export/reviews/csv')
+    @UseGuards(JwtAuthGuard, RoleGuard([Role.SITE_ADMIN, Role.ORG_ADMIN, Role.TEAM_ADMIN]))
+    async exportCSV(
+        @Query('sort') sort: 'recent' | 'rating' = 'recent',
+        @Query('isByPublic') isByPublic: boolean = false,
+        @Res() res: Response,
+    ) {
+        try {
+            const csv = await this.reviewService.exportCSV(sort, isByPublic);
+            const now = new Date();
+            const timestamp = format(now, 'yyyyMMdd-HHmmss');
+            const filename = `review-export-${timestamp}.csv`;
+
+            res.header('Content-Type', 'text/csv');
+            res.header('Content-Disposition', `attachment; filename=${filename}`);
+            res.status(200).send(csv);
+        } catch (error) {
+            res.status(500).send({ message: 'Failed to export CSV', error: error.message });
+        }
     }
 }

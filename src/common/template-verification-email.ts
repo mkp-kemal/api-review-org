@@ -1,10 +1,40 @@
-import { reviewsPosted } from "./template-html";
+import { SubscriptionPlan } from "@prisma/client";
+import { checkoutPlan, orgClaim, reviewsFlagged, reviewsPosted, teamClaim, teamClaimToMe } from "./template-html";
 
 export type requiremenetsEmail = {
     to: string,
     from: string
     subject: string,
     html: string,
+}
+
+export type configEmailParamsReviews = {
+    email: string,
+    date: any,
+    title: string,
+    body: string,
+    star: number,
+    team: string,
+    teamUrl: string,
+}
+
+export type configEmailParamsClaim = {
+    email: string,
+    date: any,
+    nameOrg: string,
+    adminUrl: string,
+    emailto: string
+}
+
+export type configEmailParamsCheckout = {
+    email: string,
+    date: any,
+    targetType: string,
+    amount: number,
+    url: string,
+    plan: SubscriptionPlan,
+    currency: string,
+    targetName: string,
 }
 
 export function templateVerifEmailHTML(token: string): string {
@@ -19,6 +49,26 @@ export function templateResetPassEmailHTML(token: string): string {
     return `<p>Reset your password by clicking <a href="${resetUrl}">this link</a>.</p>`;
 }
 
-export function templateReviewsPosted(config){
+export function templateReviewsPosted(config: configEmailParamsReviews){
     return reviewsPosted(config);
+}
+
+export function templateReviewsFlagged(config: configEmailParamsReviews){
+    return reviewsFlagged(config);
+}
+
+export function templateOrgClaim(config: configEmailParamsClaim){
+    return orgClaim(config);
+}
+
+export function templateTeamClaim(config: configEmailParamsClaim){
+    return teamClaim(config);
+}
+
+export function templateTeamClaimByMe(config: configEmailParamsClaim){
+    return teamClaimToMe(config);
+}
+
+export function templateCheckoutPlan(config: configEmailParamsCheckout){
+    return checkoutPlan(config);
 }

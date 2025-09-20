@@ -4,10 +4,11 @@ import { OrgStatus, Role, SubscriptionPlan, SubscriptionStatus } from '@prisma/c
 import Redis from 'ioredis';
 import { PrismaService } from 'prisma/prisma.service';
 import { OrganizationDto } from 'src/auth/dto/create-organization.dto';
+import { EmailService } from 'src/email/email.service';
 
 @Injectable()
 export class OrganizationService {
-  constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis) { }
+  constructor(private prisma: PrismaService, @InjectRedis() private readonly redis: Redis, private emailService: EmailService) { }
 
   async findAll(query: { name?: string; state?: string; city?: string, isFilterByStatus?: OrgStatus }) {
     const cacheKey = `organizations`;
@@ -186,7 +187,11 @@ export class OrganizationService {
     const org = await this.findById(orgId);
     if (org.claimedById) throw new BadRequestException('Organization already claimed');
 
-    
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+
     if (!emailDomain || !org.website?.includes(emailDomain)) {
       throw new BadRequestException('Email domain does not match organization domain');
     }
@@ -201,6 +206,16 @@ export class OrganizationService {
       data: { role: Role.ORG_ADMIN },
     });
 
+    if (user.email) {
+      await this.emailService.sendOrgClaim({
+        email: user.email,
+        date: new Date(),
+        adminUrl: `${process.env.APP_URL}/admin/index.html`,
+        nameOrg: org.name,
+        emailto: ""
+      });
+    }
+
     return {
       message: 'Organization claimed successfully',
     };
@@ -209,6 +224,10 @@ export class OrganizationService {
   async changeClaimStatus(orgId: string, status: 'approve' | 'reject', userId: string) {
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
+    });
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
     });
 
     if (!org) {
@@ -267,9 +286,9 @@ export class OrganizationService {
     const teams = await this.prisma.team.findMany({
       where: {
         AND: [
-          { status: 'APPROVED' }, 
+          { status: 'APPROVED' },
           {
-            organization: { status: 'APPROVED' } 
+            organization: { status: 'APPROVED' }
           },
           {
             OR: [
@@ -284,11 +303,11 @@ export class OrganizationService {
         ]
       },
       include: {
-        organization: true 
+        organization: true
       }
     });
 
-    
+
     const result = teams.map(team => ({
       id: team.id,
       name: team.name,
@@ -432,62 +451,62 @@ export class OrganizationService {
   }
 
   async getTeamsWithAccessByPlan(userId: string, role: Role, plan: SubscriptionPlan) {
-  const planOrder = [SubscriptionPlan.BASIC, SubscriptionPlan.PRO, SubscriptionPlan.ELITE];
-  const currentPlanIndex = planOrder.indexOf(plan);
+    const planOrder = [SubscriptionPlan.BASIC, SubscriptionPlan.PRO, SubscriptionPlan.ELITE];
+    const currentPlanIndex = planOrder.indexOf(plan);
 
-  if (currentPlanIndex <= 0) {
-    return [];
-  }
+    if (currentPlanIndex <= 0) {
+      return [];
+    }
 
-  const lowerPlans = planOrder.slice(0, currentPlanIndex);
+    const lowerPlans = planOrder.slice(0, currentPlanIndex);
 
-  if (role === 'ORG_ADMIN') {
-    return this.prisma.organization.findMany({
-      where: {
-        claimedById: userId,
-        subscription: { plan: { in: lowerPlans } }
-      },
-      select: {
-        id: true,
-        name: true,
-        city: true,
-        state: true,
-        website: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        approvedById: true,
-        submittedById: true,
-        logo: true,
-        subscription: {
-          select: {
-            id: true,
-            plan: true,
-            status: true,
-            stripeSubId: true,
-            createdAt: true,
-          }
+    if (role === 'ORG_ADMIN') {
+      return this.prisma.organization.findMany({
+        where: {
+          claimedById: userId,
+          subscription: { plan: { in: lowerPlans } }
         },
-        teams: {
-          select: {
-            id: true,
-            name: true,
-            division: true,
-            ageLevel: true,
-            city: true,
-            state: true,
-            status: true,
-            createdAt: true,
-            updatedAt: true,
-            logo: true,
+        select: {
+          id: true,
+          name: true,
+          city: true,
+          state: true,
+          website: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          approvedById: true,
+          submittedById: true,
+          logo: true,
+          subscription: {
+            select: {
+              id: true,
+              plan: true,
+              status: true,
+              stripeSubId: true,
+              createdAt: true,
+            }
+          },
+          teams: {
+            select: {
+              id: true,
+              name: true,
+              division: true,
+              ageLevel: true,
+              city: true,
+              state: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+              logo: true,
+            }
           }
         }
-      }
-    });
-  }
+      });
+    }
 
-  // Untuk role selain ORG_ADMIN, bisa sesuaikan sesuai kebutuhan
-  return [];
-}
+    // Untuk role selain ORG_ADMIN, bisa sesuaikan sesuai kebutuhan
+    return [];
+  }
 
 }

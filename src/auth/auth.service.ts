@@ -30,6 +30,7 @@ export class AuthService {
                 email: dto.email,
                 passwordHash: hash,
                 isVerified: false,
+                lastLogin: "-",
                 createdAt: new Date(),
             },
         });
@@ -141,6 +142,11 @@ export class AuthService {
 
         const accessToken = await this.signAccessToken(user.id, user.role, user.email);
         const refresh = await this.createRefreshToken(user.id);
+
+        await this.prisma.user.update({
+            where: { id: user.id },
+            data: { lastLogin: new Date() },
+        });
 
         return { accessToken, refreshToken: refresh.token };
     }
